@@ -1,7 +1,7 @@
 use axum::{extract::Query, routing::post, Router};
 use std::env;
 
-use axum::Extension;
+use axum::{Extension, Json};
 use serde::de::{self, Deserializer};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -120,6 +120,11 @@ struct Locations {
     locations: Vec<DataObj>,
 }
 
+#[derive(Serialize)]
+struct OverlandResponse {
+    results: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
     let pool = PgPoolOptions::new()
@@ -153,7 +158,7 @@ async fn add_points(
     body: String,
     Query(_params): Query<HashMap<String, String>>,
     Extension(pool): Extension<PgPool>,
-) -> String {
+) -> Json<OverlandResponse> {
     let p: Locations = serde_json::from_str(&body).unwrap();
     for data_obj in p.locations.iter() {
         match data_obj {
@@ -162,12 +167,9 @@ async fn add_points(
                 properties,
             } => {
                 if let Props::LocProps(props) = properties {
-                    println!("{:?}", geometry);
                     let point = match geometry {
                         Geom::Point { coordinates } => coordinates,
                     };
-                    //"2022-04-27T11:57:04Z"
-                    println!("{}", props.timestamp);
                     let offsetdt = sqlx::types::time::PrimitiveDateTime::parse(
                         props.timestamp.clone(),
                         "%FT%TZ",
@@ -193,7 +195,7 @@ VALUES ( $1, $2, $3, $4, $5, $6, $7, $8, $9, $10 ) RETURNING pt_id"#,
             }
         }
     }
-
-    println!("{:?}", p);
-    "ok".to_string()
+    Json(OverlandResponse {
+        results: "ok".to_string(),
+    })
 }

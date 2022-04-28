@@ -1,6 +1,14 @@
-CREATE TYPE MOTION AS ENUM ('driving', 'walking', 'running', 'cycling', 'stationary');
-CREATE TYPE BAT_TYPE AS ENUM ('unknown', 'charging', 'full', 'unplugged');
-CREATE TABLE points (
+--create types
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'motion') THEN
+        CREATE TYPE MOTION AS ENUM ('driving', 'walking', 'running', 'cycling', 'stationary');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'bat_type') THEN
+        CREATE TYPE BAT_TYPE AS ENUM ('unknown', 'charging', 'full', 'unplugged');
+    END IF;
+END$$;
+CREATE TABLE IF NOT EXISTS points (
 	pt_id serial PRIMARY KEY,
     user_id VARCHAR ( 50 ) NOT NULL,
     time_id TIMESTAMP,
