@@ -73,7 +73,7 @@ struct LocProps {
     #[serde(rename = "device_id")]
     user_id: Option<String>,
     activity: Option<String>,
-    altitude: i16,
+    altitude: Option<i16>,
     battery_level: f32,
     battery_state: BatteryState,
     deferred: Option<i32>,
@@ -176,7 +176,7 @@ async fn add_points(
                     )
                     .unwrap();
                     let user_id = props.user_id.clone().unwrap_or_default();
-                    let rec = sqlx::query!(
+                    sqlx::query!(
                         r#"INSERT INTO points ( user_id, time_id, altitude, speed, motion, battery, battery_level, wifi, coords_x, coords_y)
 VALUES ( $1, $2, $3, $4, $5, $6, $7, $8, $9, $10 ) RETURNING pt_id"#,
                         user_id,
