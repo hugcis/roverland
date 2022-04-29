@@ -75,11 +75,11 @@ struct LocProps {
     user_id: Option<String>,
     activity: Option<String>,
     altitude: Option<i16>,
-    battery_level: f32,
-    battery_state: BatteryState,
+    battery_level: Option<f32>,
+    battery_state: Option<BatteryState>,
     deferred: Option<i32>,
     desired_accuracy: Option<i32>,
-    horizontal_accuracy: i32,
+    horizontal_accuracy: Option<i32>,
     locations_in_payload: Option<i32>,
     #[serde(default)]
     motion: Vec<Motion>,
@@ -87,7 +87,7 @@ struct LocProps {
     significant_change: Option<i32>,
     speed: Option<i32>,
     timestamp: String,
-    vertical_accuracy: i32,
+    vertical_accuracy: Option<i32>,
     wifi: String,
 }
 
