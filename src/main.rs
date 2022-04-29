@@ -122,7 +122,7 @@ struct Locations {
 
 #[derive(Serialize)]
 struct OverlandResponse {
-    results: String,
+    result: String,
 }
 
 #[tokio::main]
@@ -196,6 +196,6 @@ VALUES ( $1, $2, $3, $4, $5, $6, $7, $8, $9, $10 ) RETURNING pt_id"#,
         }
     }
     Json(OverlandResponse {
-        results: "ok".to_string(),
+        result: "ok".to_string(),
     })
 }
