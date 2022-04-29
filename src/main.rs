@@ -85,7 +85,7 @@ struct LocProps {
     motion: Vec<Motion>,
     pauses: Option<bool>,
     significant_change: Option<i32>,
-    speed: i32,
+    speed: Option<i32>,
     timestamp: String,
     vertical_accuracy: i32,
     wifi: String,
