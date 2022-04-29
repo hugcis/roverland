@@ -1,3 +1,4 @@
+use axum::http::StatusCode;
 use axum::{extract::Query, routing::post, Router};
 use std::env;
 
@@ -158,8 +159,13 @@ async fn add_points(
     body: String,
     Query(_params): Query<HashMap<String, String>>,
     Extension(pool): Extension<PgPool>,
-) -> Json<OverlandResponse> {
-    let p: Locations = serde_json::from_str(&body).unwrap();
+) -> Result<(StatusCode, Json<OverlandResponse>), (StatusCode, String)> {
+    let p: Locations = serde_json::from_str(&body).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Error parsing data {e}\n Content: {body}"),
+        )
+    })?;
     for data_obj in p.locations.iter() {
         match data_obj {
             DataObj::Feature {
@@ -195,7 +201,10 @@ VALUES ( $1, $2, $3, $4, $5, $6, $7, $8, $9, $10 ) RETURNING pt_id"#,
             }
         }
     }
-    Json(OverlandResponse {
-        result: "ok".to_string(),
-    })
+    Ok((
+        StatusCode::OK,
+        Json(OverlandResponse {
+            result: "ok".to_string(),
+        }),
+    ))
 }
