@@ -81,6 +81,7 @@ struct LocProps {
     desired_accuracy: Option<i32>,
     horizontal_accuracy: i32,
     locations_in_payload: Option<i32>,
+    #[serde(default)]
     motion: Vec<Motion>,
     pauses: Option<bool>,
     significant_change: Option<i32>,
