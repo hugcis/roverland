@@ -161,6 +161,8 @@ async fn add_points(
     Extension(pool): Extension<PgPool>,
 ) -> Result<(StatusCode, Json<OverlandResponse>), (StatusCode, String)> {
     let p: Locations = serde_json::from_str(&body).map_err(|e| {
+        tracing::debug!("{e}");
+        println!("{e}");
         println!("{body}");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
