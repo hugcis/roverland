@@ -10,7 +10,7 @@ sqlx = { version = "0.5", features = [ "runtime-tokio-rustls", "postgres", "time
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower = "0.4.12"
-tower-http = { version = "0.2.5", features = ["trace"] }
+tower-http = { version = "0.2.5", features = ["fs", "trace"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1"
 time = { version = "0.3.9", features = ["parsing", "macros"] }

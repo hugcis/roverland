@@ -1,9 +1,5 @@
 use axum::http::{Request, StatusCode};
-use axum::{
-    extract::Query,
-    middleware::{self, Next},
-    response::IntoResponse,
-};
+use axum::{extract::Query, middleware::Next, response::IntoResponse};
 use axum::{Extension, Json};
 use serde::{
     de::{self, Deserializer},
@@ -17,7 +13,6 @@ use sqlx::{
     types::time::{OffsetDateTime, PrimitiveDateTime},
 };
 use std::collections::HashMap;
-use std::io::BufRead;
 use std::str::FromStr;
 use std::time::Duration;
 
