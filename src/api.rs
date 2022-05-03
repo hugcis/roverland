@@ -263,7 +263,7 @@ async fn insert_item(
     .await
 }
 
-const TOKEN: &'static str = "DEVTOKEN123984";
+const TOKEN: &'static str = "oPF2pkbvUBqmanC8ft9VbpwJwo9zK3HYkYhyAmps6rJzZHUmDmFGMQyysMnXymgK";
 
 pub async fn auth<B>(req: Request<B>, next: Next<B>) -> impl IntoResponse {
     let auth_header = req.uri().query().unwrap_or("").split("&").any(|x| {
