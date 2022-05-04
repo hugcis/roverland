@@ -12,10 +12,8 @@ use sqlx::{
     postgres::PgPool,
     types::time::{Date, OffsetDateTime, PrimitiveDateTime},
 };
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
-use time::ext::NumericalDuration;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
@@ -151,13 +149,18 @@ pub struct OverlandResponse {
     saved: i32,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum TimePeriod {
-    #[default]
     Day,
     Week,
     Month,
+}
+
+impl Default for TimePeriod {
+    fn default() -> Self {
+        Self::Day
+    }
 }
 
 #[derive(Deserialize, Debug)]
