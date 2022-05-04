@@ -21,61 +21,116 @@ L.Control.Command = L.Control.extend({
             .addListener(controlDiv, 'click', L.DomEvent.stopPropagation)
             .addListener(controlDiv, 'click', L.DomEvent.preventDefault)
             .addListener(controlDiv, 'click', function() {
-                MapShowCommand();
+                PreviousDate();
             });
 
         var controlUI = L.DomUtil.create('div', 'leaflet-control-command-interior', controlDiv);
-        controlUI.innerHTML = "Test";
-        controlUI.title = 'Map Commands';
+        controlUI.innerHTML = "Previous";
         return controlDiv;
     }
 });
-
 L.control.command = function(options) {
     return new L.Control.Command(options);
 };
 L.control.command({}).addTo(map);
 
-function onEachFeature(feature, layer) {
-    var popupContent = '<p>I started out as a GeoJSON ' +
-        feature.geometry.type + ', but now I\'m a Leaflet vector!</p>';
+L.Control.Command = L.Control.extend({
+    options: {
+        position: 'topleft',
+    },
 
-    if (feature.properties && feature.properties.popupContent) {
-        popupContent += feature.properties.popupContent;
+    onAdd: function(map) {
+        var controlDiv = L.DomUtil.create('div', 'leaflet-control-command');
+        L.DomEvent
+            .addListener(controlDiv, 'click', L.DomEvent.stopPropagation)
+            .addListener(controlDiv, 'click', L.DomEvent.preventDefault)
+            .addListener(controlDiv, 'click', function() {
+                NextDate();
+            });
+
+        var controlUI = L.DomUtil.create('div', 'leaflet-control-command-interior', controlDiv);
+        controlUI.innerHTML = "Next";
+        return controlDiv;
+    }
+});
+L.control.command = function(options) {
+    return new L.Control.Command(options);
+};
+L.control.command({}).addTo(map);
+
+function NextDate() {
+  date.setDate(date.getDate() + 1);
+  updateData(date);
+}
+
+function PreviousDate() {
+  date.setDate(date.getDate() - 1);
+  updateData(date);
+}
+
+
+function onEachFeature(feature, layer) {
+    var popupContent = "";
+
+    if (feature.properties && feature.properties.timestamp) {
+        popupContent += "<b>" + feature.properties.timestamp + "</b>";
     }
 
     layer.bindPopup(popupContent);
 }
-async function fetchDataJSON() {
-    const response = await fetch(baseUrl + "/api/query?tz=2022-04-30T11:45:41Z&token=oPF2pkbvUBqmanC8ft9VbpwJwo9zK3HYkYhyAmps6rJzZHUmDmFGMQyysMnXymgK");
+
+let date = new Date();
+let overlayLayer = null;
+
+async function fetchDataJSON(date) {
+  const response = await fetch(baseUrl + "/api/query?date=" + date.toISOString() + "&token=oPF2pkbvUBqmanC8ft9VbpwJwo9zK3HYkYhyAmps6rJzZHUmDmFGMQyysMnXymgK");
     const content = await response.json();
     return content;
 }
 
-fetchDataJSON()
-    .then(json => {
-        let coords = json.map((d) => d.geometry.coordinates);
-        let avg = coords.reduce((a, b) => [(a[0] + b[0]), (a[1] + b[1])]);
-        avg[0] /= coords.length;
-        avg[1] /= coords.length;
-        map.setView([coords[0][1], coords[0][0]], 13);
-        var bicycleRentalLayer = L.geoJSON(json, {
+function drawGeoJSON(json) {
+    json.sort((obj) => Date.parse(obj.properties.timestamp));
+    json = json.filter(function(value, index, Arr) {
+        return index % 5 == 0;
+    });
 
-            style: function(feature) {
-                return feature.properties && feature.properties.style;
-            },
+    let coords = json.map((d) => [d.geometry.coordinates[1], d.geometry.coordinates[0]]);
+    let avg = coords.reduce((a, b) => [(a[0] + b[0]), (a[1] + b[1])]);
+    avg[0] /= coords.length;
+    avg[1] /= coords.length;
+    map.setView(coords[0], 13);
+    // let line = L.polyline(coords).addTo(map);
 
-            onEachFeature: onEachFeature,
+    overlayLayer = L.geoJSON(json, {
 
-            pointToLayer: function(feature, latlng) {
-                return L.circleMarker(latlng, {
-                    radius: 3,
-                    fillColor: '#ff7800',
-                    weight: 0,
-                    opacity: 0.2,
-                    fillOpacity: 0.2
-                });
-            }
-        }).addTo(map);
-    })
+        style: function(feature) {
+            return feature.properties && feature.properties.style;
+        },
+
+        onEachFeature: onEachFeature,
+
+        pointToLayer: function(feature, latlng) {
+            return L.circleMarker(latlng, {
+                radius: 3,
+                fillColor: '#ff7800',
+                weight: 0,
+                opacity: 0.2,
+                fillOpacity: 0.2
+            });
+        }
+    }).addTo(map);
+
+}
+
+
+function updateData(date) {
+  if (overlayLayer) {
+    map.removeLayer(overlayLayer);
+  }
+  fetchDataJSON(date)
+    .then(drawGeoJSON)
     .catch(err => console.error(`Fetch problem: ${err.message}`));
+
+}
+
+updateData(date);

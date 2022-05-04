@@ -10,11 +10,12 @@ use sqlx::postgres::PgRow;
 use sqlx::Row;
 use sqlx::{
     postgres::PgPool,
-    types::time::{OffsetDateTime, PrimitiveDateTime},
+    types::time::{Date, OffsetDateTime, PrimitiveDateTime},
 };
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
+use time::ext::NumericalDuration;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
@@ -150,20 +151,55 @@ pub struct OverlandResponse {
     saved: i32,
 }
 
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum TimePeriod {
+    #[default]
+    Day,
+    Week,
+    Month,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+#[serde(untagged)]
+pub enum GeoQuery {
+    Date {
+        date: Option<String>,
+        #[serde(default)]
+        duration: TimePeriod,
+    },
+    Interval {
+        start: String,
+        end: String,
+    },
+}
+
+fn get_today_as_primitive_dt() -> Date {
+    let now = OffsetDateTime::now_utc();
+    now.date()
+}
+
 pub async fn query_points(
-    Query(params): Query<HashMap<String, String>>,
+    Query(geo_query): Query<GeoQuery>,
     Extension(pool): Extension<PgPool>,
 ) -> Result<(StatusCode, Json<Vec<DataObj>>), (StatusCode, String)> {
-    let offsetdt = params.get("tz").map_or_else(
-        || {
-            let now = OffsetDateTime::now_utc();
-            PrimitiveDateTime::new(now.date(), now.time())
-        },
-        |tz| PrimitiveDateTime::parse(tz, "%FT%TZ").unwrap(),
-    );
+    let (t_start, t_end) = match geo_query {
+        GeoQuery::Date { date, duration } => {
+            let offsetdt = date.map_or_else(get_today_as_primitive_dt, |tz| {
+                Date::parse(tz, "%F").unwrap()
+            });
 
-    let t_start = offsetdt - Duration::from_secs(3600 * 24);
-    let t_end = offsetdt;
+            let t_start = match duration {
+                TimePeriod::Day => offsetdt.midnight(),
+                TimePeriod::Week => offsetdt.midnight() - Duration::from_secs(3600 * 24 * 7),
+                TimePeriod::Month => offsetdt.midnight() - Duration::from_secs(3600 * 24 * 30),
+            };
+            let t_end = offsetdt.next_day().midnight();
+            (t_start, t_end)
+        }
+        GeoQuery::Interval { .. } => todo!(),
+    };
 
     let request = format!(
         r#"SELECT user_id, time_id, altitude, speed, motion, battery, battery_level,
@@ -185,7 +221,13 @@ pub async fn query_points(
             Ok(DataObj::Feature {
                 properties: Props::LocProps(LocProps {
                     user_id: row.try_get("user_id")?,
-                    timestamp: ts.format("%FT%TZ"),
+                    timestamp: format!(
+                        "{}T{:02}:{:02}:{:02}Z",
+                        ts.format("%F"),
+                        ts.hour(),
+                        ts.minute(),
+                        ts.second()
+                    ),
                     altitude: row.try_get("altitude")?,
                     speed: row.try_get("speed")?,
                     motion: motions,
