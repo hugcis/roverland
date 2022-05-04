@@ -1,5 +1,5 @@
-use axum::http::{Request, StatusCode};
-use axum::{extract::Query, middleware::Next, response::IntoResponse};
+use axum::extract::Query;
+use axum::http::StatusCode;
 use axum::{Extension, Json};
 use serde::{
     de::{self, Deserializer},
@@ -23,6 +23,7 @@ pub enum DataObj {
 }
 
 #[derive(Serialize, Debug)]
+#[serde(tag = "type")]
 pub enum Props {
     LocProps(LocProps),
     TripProps(TripProps),
@@ -54,6 +55,7 @@ impl<'de> Deserialize<'de> for Props {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename = "trip")]
 pub struct TripProps {
     #[serde(rename = "device_id")]
     user_id: Option<String>,
@@ -67,12 +69,11 @@ pub struct TripProps {
     steps: i32,
     stopped_automatically: bool,
     timestamp: String,
-    #[serde(rename = "type")]
-    ttype: String,
     wifi: String,
 }
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Default)]
+#[serde(rename = "position")]
 pub struct LocProps {
     #[serde(rename = "device_id")]
     user_id: Option<String>,
@@ -258,42 +259,10 @@ async fn insert_item(
     .await
 }
 
-const TOKEN: &'static str = "oPF2pkbvUBqmanC8ft9VbpwJwo9zK3HYkYhyAmps6rJzZHUmDmFGMQyysMnXymgK";
-
-pub async fn auth<B>(req: Request<B>, next: Next<B>) -> impl IntoResponse {
-    let auth_header = req.uri().query().unwrap_or("").split("&").any(|x| {
-        let split: Vec<String> = x.split("=").map(|x| x.to_string()).collect();
-        if (split.len() == 2) && (split[0] == "token") && token_is_valid(&split[1]) {
-            true
-        } else {
-            false
-        }
-    });
-
-    if auth_header {
-        Ok(next.run(req).await)
-    } else {
-        Err(StatusCode::UNAUTHORIZED)
-    }
-}
-
-fn token_is_valid(token: &str) -> bool {
-    token == TOKEN
-}
-
 pub async fn add_points(
     body: String,
-    Query(params): Query<HashMap<String, String>>,
     Extension(pool): Extension<PgPool>,
 ) -> Result<(StatusCode, Json<OverlandResponse>), (StatusCode, String)> {
-    match params.get("token") {
-        Some(token) => {
-            if token != TOKEN {
-                return Err((StatusCode::UNAUTHORIZED, "Unauthorized request".to_string()));
-            }
-        }
-        _ => {}
-    }
     let p: Locations = serde_json::from_str(&body).map_err(|e| {
         tracing::debug!("{e}");
         (

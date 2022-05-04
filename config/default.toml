@@ -1,0 +1,2 @@
+[database]
+url = "postgres://overland:overland-dev@localhost/overland_db"

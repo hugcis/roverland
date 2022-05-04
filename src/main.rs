@@ -1,14 +1,16 @@
 mod api;
+mod settings;
 
-use api::{add_points, auth, query_points};
+use api::{add_points, query_points};
 use axum::{
-    http::StatusCode,
-    middleware,
+    http::{Request, StatusCode},
+    middleware::{self, Next},
+    response::IntoResponse,
     routing::{get, get_service, post},
     Extension, Router,
 };
+use settings::Settings;
 use sqlx::postgres::PgPoolOptions;
-use std::env;
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, trace::TraceLayer};
@@ -16,9 +18,11 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
+    let settings = Settings::new().unwrap();
+
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect(&env::var("DATABASE_URL").unwrap())
+        .connect(&settings.database.url)
         .await?;
 
     tracing_subscriber::registry()
@@ -45,7 +49,9 @@ async fn main() -> Result<(), sqlx::Error> {
             ),
         )
         .nest("/api", api_routes)
-        .route_layer(middleware::from_fn(auth))
+        .route_layer(middleware::from_fn(move |req, next| {
+            auth(req, next, settings.auth.clone())
+        }))
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 18032));
@@ -56,4 +62,25 @@ async fn main() -> Result<(), sqlx::Error> {
         .await
         .unwrap();
     Ok(())
+}
+
+pub async fn auth<B>(req: Request<B>, next: Next<B>, auth: settings::Auth) -> impl IntoResponse {
+    let auth_header = req.uri().query().unwrap_or("").split("&").any(|x| {
+        let split: Vec<String> = x.split("=").map(|x| x.to_string()).collect();
+        if (split.len() == 2) && (split[0] == "token") && token_is_valid(&split[1], auth.clone()) {
+            true
+        } else {
+            false
+        }
+    });
+
+    if auth_header {
+        Ok(next.run(req).await)
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
+    }
+}
+
+fn token_is_valid(token: &str, auth: settings::Auth) -> bool {
+    token == auth.token
 }
