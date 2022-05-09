@@ -1,7 +1,9 @@
 mod api;
+mod auth;
 mod settings;
 
 use api::{add_points, query_points};
+use auth::{auth, check_username_password, insert_username_password};
 use axum::{
     http::{Request, StatusCode},
     middleware::{self, Next},
@@ -12,10 +14,12 @@ use axum::{
 use settings::Settings;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
+use std::{convert::Infallible, sync::Arc};
 use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use auth::{PasswordDatabase, PasswordStorage};
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
     let settings = Settings::new().unwrap();
@@ -25,9 +29,19 @@ async fn main() -> Result<(), sqlx::Error> {
         .connect(&settings.database.url)
         .await?;
 
+    let password_db = PasswordDatabase {
+        db_salt_component: settings.database.url[..16]
+            .as_bytes()
+            .try_into()
+            .expect("Slice with incorrect length"),
+        storage: PasswordStorage { pool: pool.clone() },
+        sessions: vec![],
+    };
+    let shared_pdb = Arc::new(password_db);
+
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "tower_http=debug".into()),
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "debug,tower_http=debug".into()),
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -36,10 +50,36 @@ async fn main() -> Result<(), sqlx::Error> {
         .route("/input", post(add_points))
         .route("/query", get(query_points))
         .layer(Extension(pool));
+    let login_routes = Router::new().nest(
+        "/",
+        get_service(ServeDir::new("./static/login")).handle_error(
+            |error: std::io::Error| async move {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Unhandled internal error: {}", error),
+                )
+            },
+        ),
+    );
+    let register_routes = Router::new().nest(
+        "/",
+        get_service(ServeDir::new("./static/register")).handle_error(
+            |error: std::io::Error| async move {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Unhandled internal error: {}", error),
+                )
+            },
+        ),
+    );
+    let check_routes = Router::new()
+        .route("/", post(check_username_password))
+        .layer(Extension(shared_pdb));
+
     let app = Router::new()
         .nest(
             "/map",
-            get_service(ServeDir::new("./content")).handle_error(
+            get_service(ServeDir::new("./static/map")).handle_error(
                 |error: std::io::Error| async move {
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -50,8 +90,11 @@ async fn main() -> Result<(), sqlx::Error> {
         )
         .nest("/api", api_routes)
         .route_layer(middleware::from_fn(move |req, next| {
-            auth(req, next, settings.auth.clone())
+            auth(req, next, Arc::clone(&assword_db))
         }))
+        .nest("/login", login_routes)
+        .nest("/register", register_routes)
+        .nest("/check", check_routes)
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 18032));
@@ -62,25 +105,4 @@ async fn main() -> Result<(), sqlx::Error> {
         .await
         .unwrap();
     Ok(())
-}
-
-pub async fn auth<B>(req: Request<B>, next: Next<B>, auth: settings::Auth) -> impl IntoResponse {
-    let auth_header = req.uri().query().unwrap_or("").split("&").any(|x| {
-        let split: Vec<String> = x.split("=").map(|x| x.to_string()).collect();
-        if (split.len() == 2) && (split[0] == "token") && token_is_valid(&split[1], auth.clone()) {
-            true
-        } else {
-            false
-        }
-    });
-
-    if auth_header {
-        Ok(next.run(req).await)
-    } else {
-        Err(StatusCode::UNAUTHORIZED)
-    }
-}
-
-fn token_is_valid(token: &str, auth: settings::Auth) -> bool {
-    token == auth.token
 }

@@ -15,3 +15,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1"
 time = { version = "0.3.9", features = ["parsing", "macros"] }
 config = "0.13.1"
+argon2 = { version = "0.4.0" }
+rand_core = { version = "0.6", features = ["std"] }
+rand = "0.8"

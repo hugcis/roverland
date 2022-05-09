@@ -76,22 +76,22 @@ pub struct TripProps {
 pub struct LocProps {
     #[serde(rename = "device_id")]
     user_id: Option<String>,
-    activity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     altitude: Option<i16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     battery_level: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     battery_state: Option<BatteryState>,
-    deferred: Option<i32>,
-    desired_accuracy: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     horizontal_accuracy: Option<i32>,
-    locations_in_payload: Option<i32>,
     #[serde(default)]
     #[sqlx(default)]
     motion: Vec<Motion>,
-    pauses: Option<bool>,
-    significant_change: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     speed: Option<i32>,
     #[sqlx(rename = "time_id")]
     timestamp: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     vertical_accuracy: Option<i32>,
     wifi: String,
 }
@@ -237,14 +237,8 @@ pub async fn query_points(
                     battery_level: row.try_get("battery_level")?,
                     battery_state: row.try_get("battery")?,
                     wifi: wifi_name.trim().to_string(),
-                    deferred: None,
-                    desired_accuracy: None,
                     horizontal_accuracy: None,
                     vertical_accuracy: None,
-                    locations_in_payload: None,
-                    activity: None,
-                    pauses: None,
-                    significant_change: None,
                 }),
                 geometry: Geom::Point {
                     coordinates: [row.try_get("coords_x")?, row.try_get("coords_y")?],
