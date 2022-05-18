@@ -17,9 +17,8 @@ pub struct Auth {
 #[allow(unused)]
 pub struct Settings {
     pub database: Database,
-    pub auth: Auth
+    pub auth: Auth,
 }
-
 
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
