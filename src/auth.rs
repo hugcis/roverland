@@ -104,6 +104,7 @@ impl PasswordStorage {
 #[derive(Clone)]
 pub struct CurrentUser {
     pub user_id: i32,
+    is_admin: bool
 }
 
 #[derive(Clone, Debug)]
@@ -163,13 +164,6 @@ impl PasswordDatabase {
             None => Err(Error::WrongUsernameOrPassword),
         }
     }
-
-    // fn salt(&self, username: &str) -> Vec<u8> {
-    //     let mut salt = Vec::with_capacity(self.db_salt_component.len() + username.as_bytes().len());
-    //     salt.extend(self.db_salt_component.as_ref());
-    //     salt.extend(username.as_bytes());
-    //     salt
-    // }
 }
 
 pub async fn auth<B>(
@@ -261,7 +255,8 @@ async fn get_token_from_uri(query: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> O
 async fn token_is_valid(token: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> Option<i32> {
     let pdb = pdb.lock().await;
     sqlx::query!(
-        r#"SELECT user_id FROM input_tokens WHERE input_token=$1"#,
+        r#"SELECT user_id, is_admin FROM input_tokens JOIN users ON
+           input_tokens.user_id=users.id WHERE input_token=$1"#,
         token
     )
     .fetch_one(&pdb.storage.pool)

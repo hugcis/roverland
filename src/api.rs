@@ -97,6 +97,7 @@ pub struct LocProps {
     wifi: String,
 }
 
+
 #[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 #[sqlx(type_name = "BAT_TYPE", rename_all = "lowercase")]
@@ -208,8 +209,8 @@ pub async fn query_points(
 
     let request = format!(
         r#"SELECT user_id, time_id, altitude, speed, motion, battery, battery_level,
-            wifi, coords_x, coords_y FROM points WHERE time_id < TO_TIMESTAMP('{}',
-            'YYYY-MM-DD HH24:MI:SS') AND time_id > TO_TIMESTAMP('{}',
+            wifi, coords_x, coords_y FROM points WHERE time_id BETWEEN TO_TIMESTAMP('{}',
+            'YYYY-MM-DD HH24:MI:SS') AND TO_TIMESTAMP('{}',
             'YYYY-MM-DD HH24:MI:SS') AND user_identifier={};"#,
         t_end.format("%F %T"),
         t_start.format("%F %T"),
