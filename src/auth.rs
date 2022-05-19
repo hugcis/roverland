@@ -1,20 +1,19 @@
+use crate::HtmlTemplate;
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
+};
+use askama::Template;
 use axum::http::{header, HeaderMap, Request, StatusCode};
 use axum::response::IntoResponse;
 use axum::Extension;
 use axum::{extract::Form, middleware::Next};
 use rand::Rng;
-
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-
-use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    Argon2,
-};
 
 const COOKIE_AUTH_LEN: usize = 64;
 const INPUT_TOKEN_LEN: usize = 64;
@@ -102,6 +101,11 @@ impl PasswordStorage {
     }
 }
 
+#[derive(Clone)]
+pub struct CurrentUser {
+    pub user_id: i32,
+}
+
 #[derive(Clone, Debug)]
 pub struct CookieSession {
     cookie: [u8; COOKIE_AUTH_LEN],
@@ -169,7 +173,7 @@ impl PasswordDatabase {
 }
 
 pub async fn auth<B>(
-    req: Request<B>,
+    mut req: Request<B>,
     next: Next<B>,
     pdb: Arc<Mutex<PasswordDatabase>>,
 ) -> impl IntoResponse {
@@ -188,59 +192,82 @@ pub async fn auth<B>(
         });
 
     // Check for cookies first and then for the valid token.
-    let auth_header = (match cookies {
+    let mut user_id_auth = match cookies {
         Some(hashmap) => {
             if let Some(val) = hashmap.get(COOKIE_NAME) {
                 tracing::debug!("found a cookie");
-                pdb.lock().await.sessions.iter().any(|ck| {
-                    ck.cookie
-                        .into_iter()
-                        .zip(val.as_bytes())
-                        .all(|(a, &b)| a == b)
-                })
+                pdb.lock()
+                    .await
+                    .sessions
+                    .iter()
+                    .find(|ck| {
+                        ck.cookie
+                            .into_iter()
+                            .zip(val.as_bytes())
+                            .all(|(a, &b)| a == b)
+                    })
+                    .map(|cookie: &CookieSession| cookie.user_id)
             } else {
-                false
+                None
             }
         }
-        None => false,
-    }) || get_token_from_uri(req.uri().query().unwrap_or(""), pdb.clone()).await;
+        None => None,
+    };
+    if user_id_auth.is_none() {
+        user_id_auth = get_token_from_uri(req.uri().query().unwrap_or(""), pdb.clone()).await;
+    }
 
-    if auth_header {
+    if let Some(user_id) = user_id_auth {
+        let current_user = CurrentUser { user_id };
+        req.extensions_mut().insert(current_user);
         Ok(next.run(req).await)
     } else {
         tracing::debug!("unauthorized request");
-        Err((StatusCode::UNAUTHORIZED, "hi"))
+        let template = Unauthorized {};
+        Err((StatusCode::UNAUTHORIZED, HtmlTemplate(template)))
     }
 }
 
-async fn get_token_from_uri(query: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> bool {
+#[derive(Template)]
+#[template(path = "login.html")]
+struct LoginTemplate {}
+
+pub async fn serve_login() -> impl IntoResponse {
+    tracing::debug!("unauthorized request");
+    let template = LoginTemplate {};
+    (StatusCode::OK, HtmlTemplate(template))
+}
+
+#[derive(Template)]
+#[template(path = "unauthorized.html")]
+struct Unauthorized {}
+
+async fn get_token_from_uri(query: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> Option<i32> {
     // Parse the query parameters for the token and check it.
-    let mut token_auth = false;
+    let mut user_id = None;
     for x in query.split("&") {
         let split: Vec<String> = x.split("=").map(|x| x.to_string()).collect();
-        if (split.len() == 2)
-            && (split[0] == "token")
-            && token_is_valid(&split[1], pdb.clone()).await
-        {
-            tracing::debug!("valid token found");
-            token_auth = true;
-            break;
+        if (split.len() == 2) && (split[0] == "token") {
+            user_id = token_is_valid(&split[1], pdb.clone()).await;
+            if user_id.is_some() {
+                tracing::debug!("valid token found");
+                break;
+            }
         }
     }
-    token_auth
+    user_id
 }
 
-async fn token_is_valid(token: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> bool {
+async fn token_is_valid(token: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> Option<i32> {
     let pdb = pdb.lock().await;
     sqlx::query!(
-        r#"SELECT valid FROM input_tokens WHERE input_token=$1"#,
+        r#"SELECT user_id FROM input_tokens WHERE input_token=$1"#,
         token
     )
     .fetch_one(&pdb.storage.pool)
     .await
     .unwrap()
-    .valid
-    .unwrap_or(false)
+    .user_id
 }
 
 pub async fn check_username_password(
@@ -266,13 +293,14 @@ pub async fn check_username_password(
                 user_id,
             });
             tracing::debug!("adding cookie {:?}", pdb.sessions[pdb.sessions.len() - 1]);
+            let mut header_value_str =
+                format!("{}={}; Secure; SameSite=Strict", COOKIE_NAME, cookie);
+            if log_in.remember == "true" {
+                header_value_str.push_str("; Max-Age=172800");
+            }
             headers.insert(
                 header::SET_COOKIE,
-                header::HeaderValue::from_str(&format!(
-                    "{}={}; Secure; SameSite=Strict",
-                    COOKIE_NAME, cookie
-                ))
-                .unwrap(),
+                header::HeaderValue::from_str(&header_value_str).unwrap(),
             );
             Ok((StatusCode::OK, headers, "Login sucessful".to_string()))
         }

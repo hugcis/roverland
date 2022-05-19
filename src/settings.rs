@@ -13,11 +13,18 @@ pub struct Auth {
     pub token: String,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+#[allow(unused)]
+pub struct BaseSettings {
+    pub url: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[allow(unused)]
 pub struct Settings {
     pub database: Database,
     pub auth: Auth,
+    pub base: BaseSettings,
 }
 
 impl Settings {

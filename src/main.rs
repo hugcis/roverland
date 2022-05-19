@@ -1,23 +1,21 @@
 use axum::{
-    http::StatusCode,
     middleware,
     routing::{get, get_service, post},
     Extension, Router,
 };
 use overland_client::api::{add_points, query_points};
-use overland_client::auth::{auth, check_username_password, insert_username_password};
+use overland_client::auth::{auth, check_username_password, insert_username_password, serve_login};
+use overland_client::auth::{PasswordDatabase, PasswordStorage};
+use overland_client::handle_static_error;
 use overland_client::settings::Settings;
 use sqlx::postgres::PgPoolOptions;
+use sqlx::PgPool;
 use std::net::SocketAddr;
 use std::sync::Arc;
-
 use tokio::sync::Mutex;
 use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
-use overland_client::auth::{PasswordDatabase, PasswordStorage};
-use overland_client::handle_static_error;
 
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
@@ -46,36 +44,33 @@ async fn main() -> Result<(), sqlx::Error> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    let addr = SocketAddr::from(([127, 0, 0, 1], 18032));
+    tracing::debug!("listening on {}", addr);
+
+    axum::Server::bind(&addr)
+        .serve(app(pool, shared_pdb).into_make_service())
+        .await
+        .unwrap();
+    Ok(())
+}
+
+fn app(pool: PgPool, shared_pdb: Arc<Mutex<PasswordDatabase>>) -> Router {
     let api_routes = Router::new()
         .route("/query", get(query_points))
         .route("/input", post(add_points))
         .layer(Extension(pool));
-
-    let login_routes = Router::new().nest(
-        "/",
-        get_service(ServeDir::new("./static/login")).handle_error(
-            |error: std::io::Error| async move {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Unhandled internal error: {}", error),
-                )
-            },
-        ),
-    );
-
+    let login_routes = Router::new()
+        .route("/", get(serve_login).post(check_username_password))
+        .layer(Extension(Arc::clone(&shared_pdb)));
     let register_routes = Router::new().nest(
         "/",
         get_service(ServeDir::new("./static/register")).handle_error(handle_static_error),
     );
-
-    let check_routes = Router::new()
-        .route("/", post(check_username_password))
-        .layer(Extension(Arc::clone(&shared_pdb)));
     let add_user_routes = Router::new()
         .route("/", post(insert_username_password))
         .layer(Extension(Arc::clone(&shared_pdb)));
 
-    let app = Router::new()
+    Router::new()
         .nest(
             "/map",
             get_service(ServeDir::new("./static/map")).handle_error(handle_static_error),
@@ -86,16 +81,6 @@ async fn main() -> Result<(), sqlx::Error> {
         }))
         .nest("/login", login_routes)
         .nest("/register", register_routes)
-        .nest("/check", check_routes)
         .nest("/add_user", add_user_routes)
-        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()));
-
-    let addr = SocketAddr::from(([127, 0, 0, 1], 18032));
-    tracing::debug!("listening on {}", addr);
-
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
-    Ok(())
+        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
 }

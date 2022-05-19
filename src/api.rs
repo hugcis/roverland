@@ -1,3 +1,4 @@
+use super::auth::CurrentUser;
 use axum::extract::Query;
 use axum::http::StatusCode;
 use axum::{Extension, Json};
@@ -186,6 +187,7 @@ fn get_today_as_primitive_dt() -> Date {
 pub async fn query_points(
     Query(geo_query): Query<GeoQuery>,
     Extension(pool): Extension<PgPool>,
+    Extension(current_user): Extension<CurrentUser>,
 ) -> Result<(StatusCode, Json<Vec<DataObj>>), (StatusCode, String)> {
     let (t_start, t_end) = match geo_query {
         GeoQuery::Date { date, duration } => {
@@ -208,9 +210,10 @@ pub async fn query_points(
         r#"SELECT user_id, time_id, altitude, speed, motion, battery, battery_level,
             wifi, coords_x, coords_y FROM points WHERE time_id < TO_TIMESTAMP('{}',
             'YYYY-MM-DD HH24:MI:SS') AND time_id > TO_TIMESTAMP('{}',
-            'YYYY-MM-DD HH24:MI:SS');"#,
+            'YYYY-MM-DD HH24:MI:SS') AND user_identifier={};"#,
         t_end.format("%F %T"),
         t_start.format("%F %T"),
+        current_user.user_id
     );
     let res: Vec<DataObj> = sqlx::query(&request)
         .map(|row: PgRow| -> sqlx::Result<DataObj> {
