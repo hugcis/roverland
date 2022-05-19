@@ -269,6 +269,7 @@ async fn insert_item(
     geometry: &Geom,
     props: &LocProps,
     pool: &PgPool,
+    current_user: &CurrentUser,
 ) -> sqlx::Result<sqlx::postgres::PgQueryResult> {
     let point = match geometry {
         Geom::Point { coordinates } => coordinates,
@@ -279,8 +280,8 @@ async fn insert_item(
     sqlx::query!(
         r#"INSERT INTO points (
             user_id, time_id, altitude, speed, motion,
-            battery, battery_level, wifi, coords_x, coords_y)
-            VALUES ( $1, $2, $3, $4, $5, $6, $7, $8, $9, $10 )"#,
+            battery, battery_level, wifi, coords_x, coords_y, user_identifier)
+            VALUES ( $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11 )"#,
         user_id,
         offsetdt,
         props.altitude,
@@ -296,6 +297,7 @@ async fn insert_item(
         props.wifi,
         point[0],
         point[1],
+        current_user.user_id
     )
     .execute(pool)
     .await
@@ -304,6 +306,7 @@ async fn insert_item(
 pub async fn add_points(
     body: String,
     Extension(pool): Extension<PgPool>,
+    Extension(current_user): Extension<CurrentUser>,
 ) -> Result<(StatusCode, Json<OverlandResponse>), (StatusCode, String)> {
     let p: Locations = serde_json::from_str(&body).map_err(|e| {
         tracing::debug!("{e}");
@@ -320,7 +323,7 @@ pub async fn add_points(
                 properties,
             } => {
                 if let Props::LocProps(props) = properties {
-                    match insert_item(&geometry, &props, &pool).await {
+                    match insert_item(&geometry, &props, &pool, &current_user).await {
                         Ok(_) => inserted += 1,
                         Err(e) => tracing::debug!("error inserting item: {e}"),
                     }
