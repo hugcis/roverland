@@ -205,15 +205,19 @@ pub async fn query_points(
         }
         GeoQuery::Interval { .. } => todo!(),
     };
-
+    let add_filter = if current_user.is_admin {
+        "".to_string()
+    } else {
+        format!("AND user_identifier={}", current_user.user_id)
+    };
     let request = format!(
         r#"SELECT user_id, time_id, altitude, speed, motion, battery, battery_level,
             wifi, coords_x, coords_y FROM points WHERE time_id BETWEEN TO_TIMESTAMP('{}',
             'YYYY-MM-DD HH24:MI:SS') AND TO_TIMESTAMP('{}',
-            'YYYY-MM-DD HH24:MI:SS') AND user_identifier={};"#,
+            'YYYY-MM-DD HH24:MI:SS') {};"#,
         t_start.format("%F %T"),
         t_end.format("%F %T"),
-        current_user.user_id
+        add_filter
     );
     let res: Vec<DataObj> = sqlx::query(&request)
         .map(|row: PgRow| -> sqlx::Result<DataObj> {

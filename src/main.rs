@@ -4,7 +4,9 @@ use axum::{
     Extension, Router,
 };
 use overland_client::api::{add_points, query_points};
-use overland_client::auth::{auth, check_username_password, insert_username_password, serve_login};
+use overland_client::auth::{
+    auth_middleware, check_username_password, insert_username_password, serve_login,
+};
 use overland_client::auth::{PasswordDatabase, PasswordStorage};
 use overland_client::handle_static_error;
 use overland_client::settings::Settings;
@@ -81,7 +83,7 @@ fn app(pool: PgPool, shared_pdb: Arc<Mutex<PasswordDatabase>>) -> Router {
         )
         .nest("/api", api_routes)
         .route_layer(middleware::from_fn(move |req, next| {
-            auth(req, next, Arc::clone(&shared_pdb))
+            auth_middleware(req, next, Arc::clone(&shared_pdb))
         }))
         .nest("/login", login_routes)
         .nest("/register", register_routes)
