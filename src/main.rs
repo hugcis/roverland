@@ -17,6 +17,8 @@ use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+struct EnvError {}
+
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
     let settings = Settings::new().unwrap();
@@ -40,7 +42,7 @@ async fn main() -> Result<(), sqlx::Error> {
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
             std::env::var("RUST_LOG")
-                .or_else(|_| settings.base.rust_log)
+                .or_else(|_| settings.base.rust_log.ok_or(EnvError {}))
                 .unwrap_or_else(|_| "debug,tower_http=debug".into()),
         ))
         .with(tracing_subscriber::fmt::layer())
