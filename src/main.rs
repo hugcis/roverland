@@ -39,7 +39,9 @@ async fn main() -> Result<(), sqlx::Error> {
 
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "debug,tower_http=debug".into()),
+            std::env::var("RUST_LOG")
+                .or_else(|_| settings.base.rust_log)
+                .unwrap_or_else(|_| "debug,tower_http=debug".into()),
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();

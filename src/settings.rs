@@ -17,6 +17,7 @@ pub struct Auth {
 #[allow(unused)]
 pub struct BaseSettings {
     pub url: String,
+    pub rust_log: Option<String>
 }
 
 #[derive(Debug, Deserialize)]

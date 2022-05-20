@@ -97,7 +97,6 @@ pub struct LocProps {
     wifi: String,
 }
 
-
 #[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 #[sqlx(type_name = "BAT_TYPE", rename_all = "lowercase")]
@@ -212,8 +211,8 @@ pub async fn query_points(
             wifi, coords_x, coords_y FROM points WHERE time_id BETWEEN TO_TIMESTAMP('{}',
             'YYYY-MM-DD HH24:MI:SS') AND TO_TIMESTAMP('{}',
             'YYYY-MM-DD HH24:MI:SS') AND user_identifier={};"#,
-        t_end.format("%F %T"),
         t_start.format("%F %T"),
+        t_end.format("%F %T"),
         current_user.user_id
     );
     let res: Vec<DataObj> = sqlx::query(&request)

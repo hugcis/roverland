@@ -7,7 +7,10 @@ use askama::Template;
 use axum::http::{header, HeaderMap, Request, StatusCode};
 use axum::response::IntoResponse;
 use axum::Extension;
-use axum::{extract::Form, middleware::Next};
+use axum::{
+    extract::{Form, Query},
+    middleware::Next,
+};
 use rand::Rng;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -104,7 +107,7 @@ impl PasswordStorage {
 #[derive(Clone)]
 pub struct CurrentUser {
     pub user_id: i32,
-    is_admin: bool
+    is_admin: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -212,29 +215,51 @@ pub async fn auth<B>(
     }
 
     if let Some(user_id) = user_id_auth {
-        let current_user = CurrentUser { user_id };
+        let current_user = CurrentUser {
+            user_id,
+            is_admin: false,
+        };
         req.extensions_mut().insert(current_user);
         Ok(next.run(req).await)
     } else {
         tracing::debug!("unauthorized request");
-        let template = Unauthorized {};
+        let template = Unauthorized {
+            url: req.uri().to_string(),
+        };
         Err((StatusCode::UNAUTHORIZED, HtmlTemplate(template)))
     }
 }
 
 #[derive(Template)]
 #[template(path = "login.html")]
-struct LoginTemplate {}
+struct LoginTemplate {
+    url: String,
+}
 
-pub async fn serve_login() -> impl IntoResponse {
+#[derive(Template)]
+#[template(path = "login_success.html")]
+struct LoginSuccessTemplate {
+    url: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RedirectUrlQuery {
+    redirect: Option<String>,
+}
+
+pub async fn serve_login(Query(url_query): Query<RedirectUrlQuery>) -> impl IntoResponse {
+    let redirect_val = url_query.redirect.unwrap_or("none".to_string());
+    tracing::debug!("will redirect to {} after login", redirect_val);
     tracing::debug!("unauthorized request");
-    let template = LoginTemplate {};
+    let template = LoginTemplate { url: redirect_val };
     (StatusCode::OK, HtmlTemplate(template))
 }
 
 #[derive(Template)]
 #[template(path = "unauthorized.html")]
-struct Unauthorized {}
+struct Unauthorized {
+    url: String,
+}
 
 async fn get_token_from_uri(query: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> Option<i32> {
     // Parse the query parameters for the token and check it.
@@ -268,6 +293,7 @@ async fn token_is_valid(token: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> Optio
 pub async fn check_username_password(
     form: Form<LogIn>,
     Extension(pdb): Extension<Arc<Mutex<PasswordDatabase>>>,
+    Query(url_query): Query<RedirectUrlQuery>,
 ) -> impl IntoResponse {
     let log_in: LogIn = form.0;
     let mut headers = HeaderMap::new();
@@ -297,7 +323,10 @@ pub async fn check_username_password(
                 header::SET_COOKIE,
                 header::HeaderValue::from_str(&header_value_str).unwrap(),
             );
-            Ok((StatusCode::OK, headers, "Login sucessful".to_string()))
+            let template = LoginSuccessTemplate {
+                url: url_query.redirect.unwrap_or("/".to_string()),
+            };
+            Ok((StatusCode::OK, headers, HtmlTemplate(template)))
         }
         Err(e) => match e {
             Error::PasswordError => Err((
