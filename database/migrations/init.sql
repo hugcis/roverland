@@ -8,6 +8,15 @@ BEGIN
         CREATE TYPE BAT_TYPE AS ENUM ('unknown', 'charging', 'full', 'unplugged');
     END IF;
 END$$;
+
+
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL,
+  is_admin BOOLEAN
+);
+
 CREATE TABLE IF NOT EXISTS points (
 	pt_id serial PRIMARY KEY,
   user_id VARCHAR ( 50 ) NOT NULL,
@@ -22,13 +31,6 @@ CREATE TABLE IF NOT EXISTS points (
   coords_y FLOAT,
   user_identifier INT NOT NULL,
   CONSTRAINT user_cst FOREIGN KEY(user_identifier) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS users (
-  id SERIAL PRIMARY KEY,
-  username TEXT NOT NULL UNIQUE,
-  password TEXT NOT NULL,
-  is_admin BOOLEAN
 );
 
 CREATE TABLE IF NOT EXISTS register_tokens (
