@@ -1,0 +1,64 @@
+# This is a basic workflow to help you get started with Actions
+name: Build
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the main branch
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps tcp port 5432 on service container to the host
+          - 5432:5432
+
+    steps:
+      # Downloads a copy of the code in your repository before running CI tests
+      - name: Check out repository code
+        uses: actions/checkout@v3
+
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          components: clippy
+          override: true
+
+      - name: Initialize user database
+        run: psql -U postgres -h localhost -p 5432 -w < ./database/migrations/create_db.sql
+        env:
+          PGPASSWORD: postgres
+      
+      - name: Run migrations
+        run: psql -U overland -d overland_db -h localhost -p 5432 -w < ./database/migrations/init.sql
+        env:
+          PGPASSWORD: overland-dev
+
+      - name: Build the app
+        # Runs a script that creates a PostgreSQL table, populates
+        # the table with data, and then retrieves the data
+        run: cargo build
