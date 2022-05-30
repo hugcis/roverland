@@ -1,2 +1,3 @@
 [database]
 url = "postgres://overland:overland-dev@localhost/overland_db"
+max_connections = 20

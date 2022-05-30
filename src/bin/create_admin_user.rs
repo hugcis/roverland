@@ -7,7 +7,7 @@ async fn main() -> Result<(), sqlx::Error> {
     let settings = Settings::new().unwrap();
 
     let pool = PgPoolOptions::new()
-        .max_connections(20)
+        .max_connections(settings.database.max_connections)
         .connect(&settings.database.url)
         .await
         .expect("Cannot connect to postgres database.");
