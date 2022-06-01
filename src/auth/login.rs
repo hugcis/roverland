@@ -1,6 +1,8 @@
 use crate::{
     auth::{
-        middleware::CookieSession, password_db::PasswordDatabase, COOKIE_AUTH_LEN, COOKIE_NAME,
+        middleware::{random_cookie, CookieSession},
+        password_db::PasswordDatabase,
+        COOKIE_NAME,
     },
     HtmlTemplate,
 };
@@ -14,7 +16,6 @@ use axum::{
     response::IntoResponse,
     Extension,
 };
-use rand::Rng;
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -72,19 +73,14 @@ pub async fn check_username_password(
         .await
     {
         Ok(user_id) => {
-            let mut rng = rand::thread_rng();
-            let cookie: String = (&mut rng)
-                .sample_iter(rand::distributions::Alphanumeric)
-                .take(COOKIE_AUTH_LEN)
-                .map(char::from)
-                .collect();
-            pdb.sessions.push(CookieSession {
-                cookie: cookie.as_bytes().try_into().unwrap(),
-                user_id,
-            });
+            let cookie = random_cookie();
+            pdb.sessions.push(CookieSession { cookie, user_id });
             tracing::debug!("adding cookie {:?}", pdb.sessions[pdb.sessions.len() - 1]);
-            let mut header_value_str =
-                format!("{}={}; Secure; SameSite=Strict", COOKIE_NAME, cookie);
+            let mut header_value_str = format!(
+                "{}={}; Secure; SameSite=Strict",
+                COOKIE_NAME,
+                std::str::from_utf8(&cookie).unwrap()
+            );
             if log_in.remember == "true" {
                 header_value_str.push_str("; Max-Age=172800");
             }

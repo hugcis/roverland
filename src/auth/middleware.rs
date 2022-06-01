@@ -8,6 +8,7 @@ use axum::{
     middleware::Next,
     response::IntoResponse,
 };
+use rand::Rng;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -22,6 +23,16 @@ pub struct CookieSession {
 #[template(path = "unauthorized.html")]
 struct UnauthorizedTemplate {
     url: String,
+}
+
+pub fn random_cookie() -> [u8; COOKIE_AUTH_LEN] {
+    let mut rng = rand::thread_rng();
+    let cookie: String = (&mut rng)
+        .sample_iter(rand::distributions::Alphanumeric)
+        .take(COOKIE_AUTH_LEN)
+        .map(char::from)
+        .collect();
+    cookie.as_bytes().try_into().unwrap()
 }
 
 fn get_cookie_map<B>(req: &Request<B>) -> Option<HashMap<String, String>> {
@@ -54,13 +65,14 @@ pub async fn auth<B>(
                     .await
                     .sessions
                     .iter()
-                    .find(|ck| {
+                    .enumerate()
+                    .find(|(_, ck)| {
                         ck.cookie
                             .into_iter()
                             .zip(val.as_bytes())
                             .all(|(a, &b)| a == b)
                     })
-                    .map(|cookie: &CookieSession| cookie.user_id)
+                    .map(|(_idx, cookie_sess): (usize, &CookieSession)| cookie_sess.user_id)
             } else {
                 None
             }
@@ -77,7 +89,8 @@ pub async fn auth<B>(
             is_admin: false,
         };
         req.extensions_mut().insert(current_user);
-        Ok(next.run(req).await)
+        let mut response = next.run(req).await;
+        Ok(response)
     } else {
         tracing::debug!("unauthorized request");
         let template = UnauthorizedTemplate {
@@ -114,4 +127,16 @@ async fn token_is_valid(token: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> Optio
     .await
     .unwrap()
     .user_id
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn should_generate_random_cookie() {
+        let cookie = random_cookie();
+        assert_eq!(cookie.len(), COOKIE_AUTH_LEN)
+    }
 }
