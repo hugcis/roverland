@@ -1,9 +1,8 @@
-use overland_client::auth::{PasswordDatabase, PasswordStorage, SignUp};
-use overland_client::settings::Settings;
+use crate::auth::{PasswordDatabase, PasswordStorage, SignUp};
+use crate::settings::Settings;
 use sqlx::postgres::PgPoolOptions;
 
-#[tokio::main]
-async fn main() -> Result<(), sqlx::Error> {
+pub async fn create_admin() -> Result<(), sqlx::Error> {
     let settings = Settings::new().unwrap();
 
     let pool = PgPoolOptions::new()

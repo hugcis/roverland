@@ -1,6 +1,13 @@
 pub mod api;
 pub mod auth;
 pub mod settings;
+mod create_admin;
+mod register_token;
+mod app;
+
+pub use create_admin::create_admin;
+pub use register_token::add_register_token;
+pub use app::run_server;
 
 use askama::Template;
 use axum::http::{HeaderMap, StatusCode};
