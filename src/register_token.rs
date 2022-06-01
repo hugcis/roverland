@@ -1,11 +1,10 @@
-use overland_client::settings::Settings;
+use crate::settings::Settings;
 use sqlx::postgres::PgPoolOptions;
 use rand::Rng;
 
 const REGISTER_TOKEN_LEN: usize = 64;
 
-#[tokio::main]
-async fn main() -> Result<(), sqlx::Error> {
+pub async fn add_register_token() -> Result<(), sqlx::Error> {
     let settings = Settings::new().unwrap();
 
     let pool = PgPoolOptions::new()

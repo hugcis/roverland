@@ -25,6 +25,7 @@ struct UnauthorizedTemplate {
     url: String,
 }
 
+/// Create a random cookie token with alphanums characters.
 pub fn random_cookie() -> [u8; COOKIE_AUTH_LEN] {
     let mut rng = rand::thread_rng();
     let cookie: String = (&mut rng)
@@ -135,8 +136,61 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_generate_random_cookie() {
+    fn should_generate_random_cookie_of_correct_len() {
         let cookie = random_cookie();
         assert_eq!(cookie.len(), COOKIE_AUTH_LEN)
+    }
+
+    #[test]
+    fn should_parse_cookies_from_requests() {
+        // No cookies header
+        let request = Request::builder()
+            .method("GET")
+            .uri("https://www.rust-lang.org/")
+            .header("X-Custom-Foo", "Bar")
+            .body(())
+            .unwrap();
+        let cookie_map = get_cookie_map(&request);
+        assert!(cookie_map.is_none());
+
+        // Multiple cookies in header
+        let request = Request::builder()
+            .method("GET")
+            .uri("https://www.rust-lang.org/")
+            .header("X-Custom-Foo", "Bar")
+            .header(
+                "Cookie",
+                "guest_id=5356763797944027; \
+                ct0=9e6eef8649dfec837a; \
+                _twitter_sess=BAh7CSIKZmxhc2h; \
+                kdt=r87TbYjr4icVWsEQk1Dq5yR; \
+                twid=43503403326189569; \
+                lang=en",
+            )
+            .body(())
+            .unwrap();
+
+        let cookie_map = get_cookie_map(&request).unwrap();
+        assert_eq!(
+            cookie_map.get("guest_id"),
+            Some(&"5356763797944027".to_string())
+        );
+        assert_eq!(
+            cookie_map.get("ct0"),
+            Some(&"9e6eef8649dfec837a".to_string())
+        );
+        assert_eq!(
+            cookie_map.get("_twitter_sess"),
+            Some(&"BAh7CSIKZmxhc2h".to_string())
+        );
+        assert_eq!(
+            cookie_map.get("kdt"),
+            Some(&"r87TbYjr4icVWsEQk1Dq5yR".to_string())
+        );
+        assert_eq!(
+            cookie_map.get("twid"),
+            Some(&"43503403326189569".to_string())
+        );
+        assert_eq!(cookie_map.get("lang"), Some(&"en".to_string()));
     }
 }
