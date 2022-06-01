@@ -11,8 +11,12 @@ struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
+    /// Run the server
     RunServer,
+    /// Manually create an administrator user. This will prompt for a username
+    /// and password.
     CreateAdmin,
+    /// Manually create a registration token to let a user register on the app.
     AddRegisterToken,
 }
 
@@ -20,8 +24,6 @@ enum Commands {
 async fn main() -> Result<(), sqlx::Error> {
     let cli = Args::parse();
 
-    // You can check for the existence of subcommands, and if found use their
-    // matches just as you would the top level cmd
     match &cli.command {
         Commands::RunServer => run_server().await?,
         Commands::CreateAdmin => create_admin().await?,
