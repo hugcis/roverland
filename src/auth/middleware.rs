@@ -36,7 +36,8 @@ pub fn random_cookie() -> [u8; COOKIE_AUTH_LEN] {
     cookie.as_bytes().try_into().unwrap()
 }
 
-fn get_cookie_map<B>(req: &Request<B>) -> Option<HashMap<String, String>> {
+/// Create a HashMap with the content of the cookie header.
+fn get_cookie_map<B>(req: &Request<B>) -> HashMap<String, String> {
     req.headers()
         .get(header::COOKIE)
         .and_then(|header| header.to_str().ok())
@@ -49,6 +50,7 @@ fn get_cookie_map<B>(req: &Request<B>) -> Option<HashMap<String, String>> {
                 })
                 .collect()
         })
+        .unwrap_or_default()
 }
 
 pub async fn auth<B>(
@@ -56,29 +58,24 @@ pub async fn auth<B>(
     next: Next<B>,
     pdb: Arc<Mutex<PasswordDatabase>>,
 ) -> impl IntoResponse {
-    let cookies: Option<HashMap<String, String>> = get_cookie_map(&req);
+    let cookies: HashMap<String, String> = get_cookie_map(&req);
     // Check for cookies first and then for the valid token.
-    let mut user_id_auth = match cookies {
-        Some(hashmap) => {
-            if let Some(val) = hashmap.get(COOKIE_NAME) {
-                tracing::debug!("found a cookie");
-                pdb.lock()
-                    .await
-                    .sessions
-                    .iter()
-                    .enumerate()
-                    .find(|(_, ck)| {
-                        ck.cookie
-                            .into_iter()
-                            .zip(val.as_bytes())
-                            .all(|(a, &b)| a == b)
-                    })
-                    .map(|(_idx, cookie_sess): (usize, &CookieSession)| cookie_sess.user_id)
-            } else {
-                None
-            }
-        }
-        None => None,
+    let mut user_id_auth = if let Some(val) = cookies.get(COOKIE_NAME) {
+        tracing::debug!("found a cookie");
+        pdb.lock()
+            .await
+            .sessions
+            .iter()
+            .enumerate()
+            .find(|(_, ck)| {
+                ck.cookie
+                    .into_iter()
+                    .zip(val.as_bytes())
+                    .all(|(a, &b)| a == b)
+            })
+            .map(|(_idx, cookie_sess): (usize, &CookieSession)| cookie_sess.user_id)
+    } else {
+        None
     };
     if user_id_auth.is_none() {
         user_id_auth = get_token_from_uri(req.uri().query().unwrap_or(""), pdb.clone()).await;
@@ -132,7 +129,6 @@ async fn token_is_valid(token: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> Optio
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     #[test]
@@ -151,7 +147,7 @@ mod tests {
             .body(())
             .unwrap();
         let cookie_map = get_cookie_map(&request);
-        assert!(cookie_map.is_none());
+        assert!(cookie_map.is_empty());
 
         // Multiple cookies in header
         let request = Request::builder()
@@ -170,7 +166,7 @@ mod tests {
             .body(())
             .unwrap();
 
-        let cookie_map = get_cookie_map(&request).unwrap();
+        let cookie_map = get_cookie_map(&request);
         assert_eq!(
             cookie_map.get("guest_id"),
             Some(&"5356763797944027".to_string())
