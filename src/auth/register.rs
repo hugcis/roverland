@@ -6,9 +6,9 @@ use tokio::sync::Mutex;
 
 #[derive(Debug)]
 pub enum RegisterError {
-    TokenError,
-    DBError,
-    PasswordError,
+    Token,
+    DB,
+    Password,
 }
 
 #[derive(Deserialize)]
@@ -37,14 +37,14 @@ pub async fn insert_username_password(
     let store_password_res = pdb.store_password(sign_up, false).await;
     match store_password_res {
         Ok(_) => (StatusCode::OK, "New user created"),
-        Err(RegisterError::TokenError) => {
+        Err(RegisterError::Token) => {
             tracing::debug!("wrong token used");
             (StatusCode::UNAUTHORIZED, "Incorrect token")
         }
-        Err(RegisterError::DBError) => {
+        Err(RegisterError::DB) => {
             (StatusCode::INTERNAL_SERVER_ERROR, "Internal database error")
         }
-        Err(RegisterError::PasswordError) => {
+        Err(RegisterError::Password) => {
             tracing::debug!("error hashing password");
             (StatusCode::INTERNAL_SERVER_ERROR, "Password error")
         }

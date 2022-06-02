@@ -15,4 +15,4 @@ pub struct CurrentUser {
 }
 
 const COOKIE_AUTH_LEN: usize = 64;
-const COOKIE_NAME: &'static str = "__Secure-roverland-auth";
+const COOKIE_NAME: &str = "__Secure-roverland-auth";

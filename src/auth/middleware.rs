@@ -43,7 +43,7 @@ fn get_cookie_map<B>(req: &Request<B>) -> Option<HashMap<String, String>> {
             cookie_str
                 .split("; ")
                 .map(|cookie_pair| {
-                    let split: Vec<&str> = cookie_pair.split("=").collect();
+                    let split: Vec<&str> = cookie_pair.split('=').collect();
                     (split[0].to_string(), split[1].to_string())
                 })
                 .collect()
@@ -89,7 +89,7 @@ pub async fn auth<B>(
             is_admin: false,
         };
         req.extensions_mut().insert(current_user);
-        let mut response = next.run(req).await;
+        let response = next.run(req).await;
         Ok(response)
     } else {
         tracing::debug!("unauthorized request");
@@ -103,8 +103,8 @@ pub async fn auth<B>(
 async fn get_token_from_uri(query: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> Option<i32> {
     // Parse the query parameters for the token and check it.
     let mut user_id = None;
-    for x in query.split("&") {
-        let split: Vec<String> = x.split("=").map(|x| x.to_string()).collect();
+    for x in query.split('&') {
+        let split: Vec<String> = x.split('=').map(|x| x.to_string()).collect();
         if (split.len() == 2) && (split[0] == "token") {
             user_id = token_is_valid(&split[1], pdb.clone()).await;
             if user_id.is_some() {
