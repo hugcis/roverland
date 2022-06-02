@@ -225,7 +225,7 @@ pub async fn query_points(
             let wifi_name: String = row.try_get("wifi")?;
             let motion_string: String = row.try_get("motion")?;
             let motions = motion_string
-                .split(",")
+                .split(',')
                 .filter_map(|x| Motion::from_str(x).ok())
                 .collect();
             Ok(DataObj::Feature {
@@ -327,7 +327,7 @@ pub async fn add_points(
                 properties,
             } => {
                 if let Props::LocProps(props) = properties {
-                    match insert_item(&geometry, &props, &pool, &current_user).await {
+                    match insert_item(geometry, props, &pool, &current_user).await {
                         Ok(_) => inserted += 1,
                         Err(e) => tracing::debug!("error inserting item: {e}"),
                     }

@@ -51,7 +51,7 @@ pub struct LogIn {
 }
 
 pub async fn serve_login(Query(url_query): Query<RedirectUrlQuery>) -> impl IntoResponse {
-    let redirect_val = url_query.redirect.unwrap_or("none".to_string());
+    let redirect_val = url_query.redirect.unwrap_or_else(|| "none".to_string());
     tracing::debug!(
         "unauthorized request, will redirect to {} after login",
         redirect_val
@@ -89,7 +89,7 @@ pub async fn check_username_password(
                 header::HeaderValue::from_str(&header_value_str).unwrap(),
             );
             let template = LoginSuccessTemplate {
-                url: url_query.redirect.unwrap_or("/".to_string()),
+                url: url_query.redirect.unwrap_or_else(|| "/".to_string()),
             };
             Ok((StatusCode::OK, headers, HtmlTemplate(template)))
         }

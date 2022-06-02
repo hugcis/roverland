@@ -99,20 +99,20 @@ impl PasswordDatabase {
         let argon2 = Argon2::default();
         let password_hash = argon2
             .hash_password(sign_up.password.as_bytes(), &salt)
-            .map_err(|_| RegisterError::PasswordError)?
+            .map_err(|_| RegisterError::Password)?
             .to_string();
         if is_admin
             || self
                 .storage
-                .check_token(&sign_up.token.unwrap_or("".to_string()))
+                .check_token(&sign_up.token.unwrap_or_else(|| "".to_string()))
                 .await
         {
             self.storage
-                .insert(String::from(sign_up.username), password_hash, is_admin)
+                .insert(sign_up.username, password_hash, is_admin)
                 .await
-                .map_err(|_| RegisterError::DBError)
+                .map_err(|_| RegisterError::DB)
         } else {
-            Err(RegisterError::TokenError)
+            Err(RegisterError::Token)
         }
     }
 
