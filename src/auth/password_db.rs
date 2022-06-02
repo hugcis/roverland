@@ -84,7 +84,6 @@ impl PasswordStorage {
 
 #[derive(Clone)]
 pub struct PasswordDatabase {
-    pub db_salt_component: [u8; 16],
     pub storage: PasswordStorage,
     pub sessions: Vec<CookieSession>,
 }
