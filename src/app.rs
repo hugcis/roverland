@@ -34,10 +34,6 @@ pub async fn run_server() -> Result<(), sqlx::Error> {
         .expect("Cannot connect to postgres database.");
 
     let password_db = PasswordDatabase {
-        db_salt_component: settings.database.url[..16]
-            .as_bytes()
-            .try_into()
-            .expect("Slice with incorrect length"),
         storage: PasswordStorage { pool: pool.clone() },
         sessions: vec![],
     };
