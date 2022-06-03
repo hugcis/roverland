@@ -1,20 +1,27 @@
 use crate::auth::{
     login::LoginError,
+    middleware::CookieSession,
     register::{RegisterError, SignUp},
-    middleware::CookieSession
 };
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
-use sqlx::postgres::PgPool;
 use rand::Rng;
-
+use sqlx::postgres::PgPool;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 const INPUT_TOKEN_LEN: usize = 64;
 
+pub type SharedPdb = Arc<Mutex<PasswordDatabase>>;
+
+pub fn new_shared_db(db_pool: &PgPool) -> SharedPdb {
+    Arc::new(Mutex::new(PasswordDatabase::new(db_pool)))
+}
+
 #[derive(Clone)]
-pub struct PasswordStorage {
+struct PasswordStorage {
     pub pool: PgPool,
 }
 
@@ -84,11 +91,24 @@ impl PasswordStorage {
 
 #[derive(Clone)]
 pub struct PasswordDatabase {
-    pub storage: PasswordStorage,
+    storage: PasswordStorage,
     pub sessions: Vec<CookieSession>,
 }
 
 impl PasswordDatabase {
+    pub fn new(db_pool: &PgPool) -> PasswordDatabase {
+        PasswordDatabase {
+            storage: PasswordStorage {
+                pool: db_pool.clone(),
+            },
+            sessions: vec![],
+        }
+    }
+
+    pub fn pool(&self) -> &PgPool {
+        &self.storage.pool
+    }
+
     pub async fn store_password(
         &self,
         sign_up: SignUp,

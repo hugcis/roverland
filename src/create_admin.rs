@@ -1,4 +1,4 @@
-use crate::auth::{PasswordDatabase, PasswordStorage, SignUp};
+use crate::auth::{PasswordDatabase, SignUp};
 use crate::settings::Settings;
 use sqlx::postgres::PgPoolOptions;
 
@@ -11,10 +11,7 @@ pub async fn create_admin() -> Result<(), sqlx::Error> {
         .await
         .expect("Cannot connect to postgres database.");
 
-    let password_db = PasswordDatabase {
-        storage: PasswordStorage { pool: pool.clone() },
-        sessions: vec![],
-    };
+    let password_db = PasswordDatabase::new(&pool);
 
     let mut username = String::new();
     println!("Admin username:");

@@ -1,8 +1,6 @@
-use crate::auth::password_db::PasswordDatabase;
+use crate::auth::SharedPdb;
 use axum::{extract::Form, http::StatusCode, response::IntoResponse, Extension};
 use serde::Deserialize;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[derive(Debug)]
 pub enum RegisterError {
@@ -30,7 +28,7 @@ impl SignUp {
 
 pub async fn insert_username_password(
     form: Form<SignUp>,
-    Extension(pdb): Extension<Arc<Mutex<PasswordDatabase>>>,
+    Extension(pdb): Extension<SharedPdb>,
 ) -> impl IntoResponse {
     let pdb = pdb.lock().await;
     let sign_up: SignUp = form.0;
@@ -41,9 +39,7 @@ pub async fn insert_username_password(
             tracing::debug!("wrong token used");
             (StatusCode::UNAUTHORIZED, "Incorrect token")
         }
-        Err(RegisterError::DB) => {
-            (StatusCode::INTERNAL_SERVER_ERROR, "Internal database error")
-        }
+        Err(RegisterError::DB) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal database error"),
         Err(RegisterError::Password) => {
             tracing::debug!("error hashing password");
             (StatusCode::INTERNAL_SERVER_ERROR, "Password error")
