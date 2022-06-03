@@ -3,7 +3,7 @@ mod middleware;
 mod password_db;
 mod register;
 
-pub use password_db::{PasswordDatabase, PasswordStorage};
+pub use password_db::{SharedPdb, new_shared_db, PasswordDatabase};
 pub use register::{SignUp, insert_username_password};
 pub use login::{serve_login, check_username_password};
 pub use middleware::auth as auth_middleware;

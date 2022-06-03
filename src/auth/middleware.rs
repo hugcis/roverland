@@ -1,5 +1,5 @@
 use crate::{
-    auth::{password_db::PasswordDatabase, CurrentUser, COOKIE_AUTH_LEN, COOKIE_NAME},
+    auth::{CurrentUser, SharedPdb, COOKIE_AUTH_LEN, COOKIE_NAME},
     HtmlTemplate,
 };
 use askama::Template;
@@ -10,8 +10,6 @@ use axum::{
 };
 use rand::Rng;
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[derive(Clone, Debug)]
 pub struct CookieSession {
@@ -53,11 +51,7 @@ fn get_cookie_map<B>(req: &Request<B>) -> HashMap<String, String> {
         .unwrap_or_default()
 }
 
-pub async fn auth<B>(
-    mut req: Request<B>,
-    next: Next<B>,
-    pdb: Arc<Mutex<PasswordDatabase>>,
-) -> impl IntoResponse {
+pub async fn auth<B>(mut req: Request<B>, next: Next<B>, pdb: SharedPdb) -> impl IntoResponse {
     let cookies: HashMap<String, String> = get_cookie_map(&req);
     // Check for cookies first and then for the valid token.
     let mut user_id_auth = if let Some(val) = cookies.get(COOKIE_NAME) {
@@ -98,7 +92,7 @@ pub async fn auth<B>(
     }
 }
 
-async fn get_token_from_uri(query: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> Option<i32> {
+async fn get_token_from_uri(query: &str, pdb: SharedPdb) -> Option<i32> {
     // Parse the query parameters for the token and check it.
     let mut user_id = None;
     for x in query.split('&') {
@@ -114,14 +108,14 @@ async fn get_token_from_uri(query: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> O
     user_id
 }
 
-async fn token_is_valid(token: &str, pdb: Arc<Mutex<PasswordDatabase>>) -> Option<i32> {
+async fn token_is_valid(token: &str, pdb: SharedPdb) -> Option<i32> {
     let pdb = pdb.lock().await;
     sqlx::query!(
         r#"SELECT user_id, is_admin FROM input_tokens JOIN users ON
            input_tokens.user_id=users.id WHERE input_token=$1"#,
         token
     )
-    .fetch_one(&pdb.storage.pool)
+    .fetch_one(pdb.pool())
     .await
     .unwrap()
     .user_id
@@ -135,6 +129,13 @@ mod tests {
     fn should_generate_random_cookie_of_correct_len() {
         let cookie = random_cookie();
         assert_eq!(cookie.len(), COOKIE_AUTH_LEN)
+    }
+
+    #[test]
+    fn should_generate_different_cookies() {
+        let cookie1 = random_cookie();
+        let cookie2 = random_cookie();
+        assert_ne!(cookie1, cookie2);
     }
 
     #[test]

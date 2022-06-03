@@ -1,8 +1,7 @@
 use crate::{
     auth::{
         middleware::{random_cookie, CookieSession},
-        password_db::PasswordDatabase,
-        COOKIE_NAME,
+        SharedPdb, COOKIE_NAME,
     },
     HtmlTemplate,
 };
@@ -17,8 +16,6 @@ use axum::{
     Extension,
 };
 use serde::Deserialize;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[derive(Debug)]
 pub enum LoginError {
@@ -62,7 +59,7 @@ pub async fn serve_login(Query(url_query): Query<RedirectUrlQuery>) -> impl Into
 
 pub async fn check_username_password(
     form: Form<LogIn>,
-    Extension(pdb): Extension<Arc<Mutex<PasswordDatabase>>>,
+    Extension(pdb): Extension<SharedPdb>,
     Query(url_query): Query<RedirectUrlQuery>,
 ) -> impl IntoResponse {
     let log_in: LogIn = form.0;

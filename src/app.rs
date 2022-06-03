@@ -2,7 +2,7 @@ use crate::api::{add_points, query_points};
 use crate::auth::{
     auth_middleware, check_username_password, insert_username_password, serve_login,
 };
-use crate::auth::{PasswordDatabase, PasswordStorage};
+use crate::auth::{SharedPdb, new_shared_db};
 use crate::handle_static_error;
 use crate::settings::Settings;
 use axum::{
@@ -16,13 +16,12 @@ use axum::{
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 struct EnvError {}
+
 
 pub async fn run_server() -> Result<(), sqlx::Error> {
     let settings = Settings::new().unwrap();
@@ -32,12 +31,7 @@ pub async fn run_server() -> Result<(), sqlx::Error> {
         .connect(&settings.database.url)
         .await
         .expect("Cannot connect to postgres database.");
-
-    let password_db = PasswordDatabase {
-        storage: PasswordStorage { pool: pool.clone() },
-        sessions: vec![],
-    };
-    let shared_pdb: Arc<Mutex<PasswordDatabase>> = Arc::new(Mutex::new(password_db));
+    let shared_pdb = new_shared_db(&pool);
 
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
@@ -58,21 +52,21 @@ pub async fn run_server() -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-fn app(pool: PgPool, shared_pdb: Arc<Mutex<PasswordDatabase>>) -> Router {
+fn app(pool: PgPool, shared_pdb: SharedPdb) -> Router {
     let api_routes = Router::new()
         .route("/query", get(query_points))
         .route("/input", post(add_points))
         .layer(Extension(pool));
     let login_routes = Router::new()
         .route("/", get(serve_login).post(check_username_password))
-        .layer(Extension(Arc::clone(&shared_pdb)));
+        .layer(Extension(shared_pdb.clone()));
     let register_routes = Router::new().nest(
         "/",
         get_service(ServeDir::new("./static/register")).handle_error(handle_static_error),
     );
     let add_user_routes = Router::new()
         .route("/", post(insert_username_password))
-        .layer(Extension(Arc::clone(&shared_pdb)));
+        .layer(Extension(shared_pdb.clone()));
 
     Router::new()
         .nest(
@@ -81,7 +75,7 @@ fn app(pool: PgPool, shared_pdb: Arc<Mutex<PasswordDatabase>>) -> Router {
         )
         .nest("/api", api_routes)
         .route_layer(middleware::from_fn(move |req, next| {
-            auth_middleware(req, next, Arc::clone(&shared_pdb))
+            auth_middleware(req, next, shared_pdb.clone())
         }))
         .route("/", get(|| async { "Welcome" }))
         .nest("/login", login_routes)
