@@ -1,21 +1,8 @@
-<!doctype html>
-<html class="no-js" lang="">
-    <head>
-        <meta charset="utf-8">
-        <title>Successful login</title>
-        <!-- Place favicon.ico in the root directory -->
-        <meta http-equiv="refresh" content="1; URL={{url}}" />
-    </head>
-    <body>
-        <!--[if lt IE 8]>
-            <p class="browserupgrade">
-            You are using an <strong>outdated</strong> browser. Please
-            <a href="http://browsehappy.com/">upgrade your browser</a> to improve
-            your experience.
-            </p>
-        <![endif]-->
-        <body>
-        <p>Login successful</p>
-        </body>
-    </body>
-</html>
+{% extends "base.html" %}
+
+{% block head %}<meta http-equiv="refresh" content="1; url={{url}}" />{% endblock %}
+{% block title %}Successful login{% endblock %}
+
+{% block content %}
+Successful login
+{% endblock %}

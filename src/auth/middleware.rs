@@ -1,6 +1,6 @@
 use crate::{
     auth::{CurrentUser, SharedPdb, COOKIE_AUTH_LEN, COOKIE_NAME},
-    HtmlTemplate,
+    HtmlTemplate
 };
 use askama::Template;
 use axum::{

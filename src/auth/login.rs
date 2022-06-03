@@ -2,8 +2,7 @@ use crate::{
     auth::{
         middleware::{random_cookie, CookieSession},
         SharedPdb, COOKIE_NAME,
-    },
-    HtmlTemplate,
+    }, HtmlTemplate,
 };
 use askama::Template;
 use axum::{
@@ -26,7 +25,7 @@ pub enum LoginError {
 #[derive(Template)]
 #[template(path = "login.html")]
 struct LoginTemplate {
-    url: String,
+    url: Option<String>,
 }
 
 #[derive(Template)]
@@ -48,12 +47,7 @@ pub struct LogIn {
 }
 
 pub async fn serve_login(Query(url_query): Query<RedirectUrlQuery>) -> impl IntoResponse {
-    let redirect_val = url_query.redirect.unwrap_or_else(|| "none".to_string());
-    tracing::debug!(
-        "unauthorized request, will redirect to {} after login",
-        redirect_val
-    );
-    let template = LoginTemplate { url: redirect_val };
+    let template = LoginTemplate { url: url_query.redirect };
     (StatusCode::OK, HtmlTemplate(template))
 }
 
@@ -120,7 +114,12 @@ mod tests {
     async fn should_serve_login_page() {
         let router = Router::new().route("/", get(serve_login));
         let response = router
-            .oneshot(Request::builder().uri("/?redirect=/random").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/?redirect=/random")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
