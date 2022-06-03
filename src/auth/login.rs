@@ -104,3 +104,25 @@ pub async fn check_username_password(
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+        routing::get,
+        Router,
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn should_serve_login_page() {
+        let router = Router::new().route("/", get(serve_login));
+        let response = router
+            .oneshot(Request::builder().uri("/?redirect=/random").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+}
