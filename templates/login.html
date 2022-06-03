@@ -1,36 +1,24 @@
-<!doctype html>
-<html class="no-js" lang="">
-    <head>
-        <meta charset="utf-8">
-        <meta http-equiv="x-ua-compatible" content="ie=edge">
-        <title></title>
-        <meta name="description" content="">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+{% extends "base.html" %}
 
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-        <!-- Place favicon.ico in the root directory -->
+{% block title %}Login{% endblock %}
 
-    </head>
-    <body>
+{% block content %}
+<form action="/login{% if url.is_some() %}?redirect={{url.as_ref().unwrap()}}{% endif %}" method="post">
+<div class="container">
+<label for="username"><b>Username</b></label>
+<input type="text" placeholder="Enter Username" name="username" required>
 
+<label for="password"><b>Password</b></label>
+<input type="password" placeholder="Enter Password" name="password" required>
 
- <form action="/login?redirect={{url}}" method="post">
-  <div class="container">
-    <label for="username"><b>Username</b></label>
-    <input type="text" placeholder="Enter Username" name="username" required>
+<button type="submit">Login</button>
+<label>
+    <input type="checkbox" checked="checked" name="remember"> Remember me
+</label>
+</div>
 
-    <label for="password"><b>Password</b></label>
-    <input type="password" placeholder="Enter Password" name="password" required>
-
-    <button type="submit">Login</button>
-    <label>
-      <input type="checkbox" checked="checked" name="remember"> Remember me
-    </label>
-  </div>
-
-  <div class="container" style="background-color:#f1f1f1">
+<div class="container" style="background-color:#f1f1f1">
     <button type="button" class="cancelbtn">Cancel</button>
-  </div>
+</div>
 </form>
-    </body>
-</html>
+ {% endblock %}

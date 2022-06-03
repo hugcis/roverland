@@ -2,9 +2,10 @@ use crate::api::{add_points, query_points};
 use crate::auth::{
     auth_middleware, check_username_password, insert_username_password, serve_login,
 };
-use crate::auth::{SharedPdb, new_shared_db};
-use crate::handle_static_error;
+use crate::auth::{new_shared_db, SharedPdb};
 use crate::settings::Settings;
+use crate::{handle_static_error, HtmlTemplate};
+use askama::Template;
 use axum::{
     handler::Handler,
     http::{StatusCode, Uri},
@@ -21,7 +22,6 @@ use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 struct EnvError {}
-
 
 pub async fn run_server() -> Result<(), sqlx::Error> {
     let settings = Settings::new().unwrap();
@@ -52,6 +52,10 @@ pub async fn run_server() -> Result<(), sqlx::Error> {
     Ok(())
 }
 
+#[derive(Template)]
+#[template(path = "index.html")]
+struct WelcomTemplate {}
+
 fn app(pool: PgPool, shared_pdb: SharedPdb) -> Router {
     let api_routes = Router::new()
         .route("/query", get(query_points))
@@ -77,7 +81,7 @@ fn app(pool: PgPool, shared_pdb: SharedPdb) -> Router {
         .route_layer(middleware::from_fn(move |req, next| {
             auth_middleware(req, next, shared_pdb.clone())
         }))
-        .route("/", get(|| async { "Welcome" }))
+        .route("/", get(|| async { HtmlTemplate(WelcomTemplate {}) }))
         .nest("/login", login_routes)
         .nest("/register", register_routes)
         .nest("/add_user", add_user_routes)
