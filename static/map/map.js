@@ -95,11 +95,23 @@ async function fetchDataJSON(date) {
 }
 
 function drawGeoJSON(json) {
-    json.sort((obj) => Date.parse(obj.properties.timestamp));
+    json.sort((obj1, obj2) => {
+        Date.parse(obj1.properties.timestamp) - Date.parse(obj2.properties.timestamp)
+    });
 
     let times = json.map((obj) => Date.parse(obj.properties.timestamp));
+    let timestamps = json.map((obj) => {
+        let date = new Date(obj.properties.timestamp);
+        return date.getHours().toString() + ":" + date.getMinutes().toString();
+    });
     let time_max = Math.max(...times);
     let time_min = Math.min(...times);
+
+    let battery_vals = json.map((obj) => {return {
+        x: Date.parse(obj.properties.timestamp),
+        y: obj.properties.battery_level,
+    };});
+
     // json = json.filter(function(value, index, Arr) {
     //     return index % 5 == 0;
     // });
@@ -138,6 +150,40 @@ function drawGeoJSON(json) {
         }
     }).addTo(map);
     map.fitBounds(overlayLayer.getBounds());
+
+    const ctx = document.getElementById('chart').getContext('2d');
+    const myChart = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            labels: timestamps,
+            datasets: [{
+                label: 'Battery level',
+                data: battery_vals,
+                borderColor: 'rgb(75, 192, 192)',
+                fill: false,
+                tension: 0.,
+                borderWidth: 1.,
+                pointRadius: 1.,
+                // showLine: true
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            },
+            tooltips: {
+                callbacks: {
+                    label: function(tooltipItem, data) {
+                        var label = data.labels[tooltipItem.index];
+                        return label;// + ': (' + tooltipItem.xLabel + ', ' + tooltipItem.yLabel + ')';
+                    }
+                }
+            }
+        }
+    });
+
 }
 
 
@@ -152,3 +198,4 @@ function updateData(date) {
 }
 
 updateData(date);
+
