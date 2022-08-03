@@ -327,7 +327,7 @@ pub async fn add_points(
                 properties,
             } => {
                 if let Props::LocProps(props) = properties {
-                    match insert_item(geometry, props, &pool, &current_user).await {
+                    match insert_item(&geometry, &props, &pool, &current_user).await {
                         Ok(_) => inserted += 1,
                         Err(e) => tracing::debug!("error inserting item: {e}"),
                     }

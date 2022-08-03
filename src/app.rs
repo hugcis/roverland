@@ -90,5 +90,5 @@ fn app(pool: PgPool, shared_pdb: SharedPdb) -> Router {
 }
 
 async fn fallback(uri: Uri) -> impl IntoResponse {
-    (StatusCode::NOT_FOUND, format!("No route for {}", uri))
+    (StatusCode::NOT_FOUND, format!("No page found for {}", uri))
 }
