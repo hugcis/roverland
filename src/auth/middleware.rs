@@ -1,6 +1,6 @@
 use crate::{
     auth::{CurrentUser, SharedPdb, COOKIE_AUTH_LEN, COOKIE_NAME},
-    HtmlTemplate
+    HtmlTemplate,
 };
 use askama::Template;
 use axum::{
@@ -52,7 +52,20 @@ fn get_cookie_map<B>(req: &Request<B>) -> HashMap<String, String> {
 }
 
 pub async fn auth<B>(mut req: Request<B>, next: Next<B>, pdb: SharedPdb) -> impl IntoResponse {
+    {
+        let lock = pdb.lock().await;
+        if lock.develop_mode {
+            let current_user = CurrentUser {
+                user_id: 1,
+                is_admin: true,
+            };
+            req.extensions_mut().insert(current_user);
+            return Ok(next.run(req).await);
+        }
+    }
+
     let cookies: HashMap<String, String> = get_cookie_map(&req);
+
     // Check for cookies first and then for the valid token.
     let mut user_id_auth = if let Some(val) = cookies.get(COOKIE_NAME) {
         tracing::debug!("found a cookie");

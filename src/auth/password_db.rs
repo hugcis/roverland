@@ -93,6 +93,7 @@ impl PasswordStorage {
 pub struct PasswordDatabase {
     storage: PasswordStorage,
     pub sessions: Vec<CookieSession>,
+    pub develop_mode: bool,
 }
 
 impl PasswordDatabase {
@@ -102,7 +103,12 @@ impl PasswordDatabase {
                 pool: db_pool.clone(),
             },
             sessions: vec![],
+            develop_mode: false,
         }
+    }
+
+    pub fn set_develop(&mut self) {
+        self.develop_mode = true;
     }
 
     pub fn pool(&self) -> &PgPool {

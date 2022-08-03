@@ -10,7 +10,8 @@ var tiles = L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}
     tileSize: 512,
     zoomOffset: -1
 }).addTo(map);
-let date = moment().startOf('day');
+let dateStart = moment().startOf('day');
+let dateEnd = dateStart.clone().add(1, "days");
 let overlayLayer = null;
 
 const ctx = document.getElementById('chart').getContext('2d');
@@ -125,7 +126,7 @@ L.Control.DatePicker = L.Control.extend({
             .addListener(controlDiv, 'click', L.DomEvent.preventDefault)
 
         controlDiv.innerHTML = `<div id="date-range-picker" style="background-color: white;">
-            <h4>Your Date Range Picker</h4>
+            <h4>Date range</h4>
             <center>
               <input type="text" name="daterange-picker" class="form-control">
             </center>
@@ -141,33 +142,35 @@ L.control.datePicker({}).addTo(map);
 $(function() {
     $('input[name="daterange-picker"]').daterangepicker({
         ranges: {
-            'Today': [moment(), moment()],
-            'Yesterday': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+            'Today': [moment(), moment().add(1, "days")],
+            'Yesterday': [moment().subtract(1, 'days'), moment()],
             'Last 7 Days': [moment().subtract(6, 'days'), moment()],
-            'Last 30 Days': [moment().subtract(29, 'days'), moment()],
-            'This Month': [moment().startOf('month'), moment().endOf('month')],
-            'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+            // 'Last 30 Days': [moment().subtract(29, 'days'), moment()],
+            // 'This Month': [moment().startOf('month'), moment().endOf('month')],
+            // 'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
         },
         "startDate": moment(),
         "endDate": moment(),
         "opens": "left"
     }, function(start, end, label) {
-        console.log('New date range selected: ' + start.format('YYYY-MM-DD') + ' to ' + end.format('YYYY-MM-DD') + ' (predefined range: ' + label + ')');
-        date = start;
-        updateData(date);
-
+        dateStart = start;
+        dateEnd = end;
+        console.log('New date range selected: ' + dateStart.format('YYYY-MM-DD') + ' to ' + dateEnd.format('YYYY-MM-DD') + ' (predefined range: ' + label + ')');
+        updateData(dateStart, dateEnd);
     })
 });
 
 
 function NextDate() {
-    date.add(1, 'days');
-    updateData(date);
+    dateStart.add(1, 'days');
+    dateEnd.add(1, 'days');
+    updateData(dateStart, dateEnd);
 }
 
 function PreviousDate() {
-    date.add(-1, 'days');
-    updateData(date);
+    dateStart.add(-1, 'days');
+    dateEnd.add(-1, 'days');
+    updateData(dateStart, dateEnd);
 }
 
 
@@ -184,8 +187,8 @@ function onEachFeature(feature, layer) {
     layer.bindPopup(popupContent);
 }
 
-async function fetchDataJSON(date) {
-    const response = await fetch(baseUrl + "/api/query?date=" + date.format());
+async function fetchDataJSON(dateStart, dateEnd) {
+    const response = await fetch(baseUrl + "/api/query?start=" + dateStart.format() + "&end=" + dateEnd.format());
     const content = await response.json();
     return content;
 }
@@ -248,15 +251,15 @@ function drawGeoJSON(json) {
     myChart.update();
 }
 
-function updateData(date) {
+function updateData(dateStart, dateEnd) {
     if (overlayLayer) {
         map.removeLayer(overlayLayer);
     }
-    fetchDataJSON(date)
+    fetchDataJSON(dateStart, dateEnd)
         .then(drawGeoJSON)
         .catch(err => console.error(`Error fetching data: ${err.message}`));
 
 }
 
 
-updateData(date);
+updateData(dateStart, dateEnd);

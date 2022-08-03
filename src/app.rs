@@ -31,8 +31,6 @@ pub async fn run_server() -> Result<(), sqlx::Error> {
         .connect(&settings.database.url)
         .await
         .expect("Cannot connect to postgres database.");
-    let shared_pdb = new_shared_db(&pool);
-
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
             std::env::var("RUST_LOG")
@@ -41,6 +39,14 @@ pub async fn run_server() -> Result<(), sqlx::Error> {
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();
+
+    let shared_pdb = new_shared_db(&pool);
+    if settings.auth.develop {
+        tracing::warn!("Development mode should not be used in production!");
+        let pdb_clone = shared_pdb.clone();
+        let mut pdb_lock = pdb_clone.lock().await;
+        pdb_lock.set_develop();
+    }
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 18032));
     tracing::debug!("listening on {}", addr);

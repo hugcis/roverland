@@ -168,14 +168,14 @@ impl Default for TimePeriod {
 #[serde(rename_all = "lowercase")]
 #[serde(untagged)]
 pub enum GeoQuery {
-    Date {
-        date: Option<String>,
-        #[serde(default)]
-        duration: TimePeriod,
-    },
     Interval {
         start: String,
         end: String,
+    },
+    Date {
+        date: String,
+        #[serde(default)]
+        duration: TimePeriod,
     },
 }
 
@@ -184,12 +184,9 @@ fn get_today_as_primitive_dt() -> Date {
     now.date()
 }
 
-pub async fn query_points(
-    Query(geo_query): Query<GeoQuery>,
-    Extension(pool): Extension<PgPool>,
-    Extension(current_user): Extension<CurrentUser>,
-) -> Result<(StatusCode, Json<Vec<DataObj>>), (StatusCode, String)> {
-    let (t_start, t_end) = match geo_query {
+fn geoquery_to_primitive_datetime(geo_query: GeoQuery) -> (PrimitiveDateTime, PrimitiveDateTime) {
+    println!("{:?}", geo_query);
+    match geo_query {
         GeoQuery::Date { date, duration } => {
             let offsetdt = date.map_or_else(get_today_as_primitive_dt, |tz| {
                 Date::parse(tz, "%F").unwrap()
@@ -203,8 +200,20 @@ pub async fn query_points(
             let t_end = offsetdt.next_day().midnight();
             (t_start, t_end)
         }
-        GeoQuery::Interval { .. } => todo!(),
-    };
+        GeoQuery::Interval { start, end } => {
+            let start_dt = Date::parse(start, "%F").unwrap().midnight();
+            let end_dt = Date::parse(end, "%F").unwrap().midnight();
+            (start_dt, end_dt)
+        }
+    }
+}
+
+pub async fn query_points(
+    Query(geo_query): Query<GeoQuery>,
+    Extension(pool): Extension<PgPool>,
+    Extension(current_user): Extension<CurrentUser>,
+) -> Result<(StatusCode, Json<Vec<DataObj>>), (StatusCode, String)> {
+    let (t_start, t_end) = geoquery_to_primitive_datetime(geo_query);
     let add_filter = if current_user.is_admin {
         "".to_string()
     } else {

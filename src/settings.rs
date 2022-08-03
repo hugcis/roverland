@@ -12,13 +12,20 @@ pub struct Database {
 #[allow(unused)]
 pub struct Auth {
     pub token: String,
+    /// Development mode where no authentication is needed.
+    #[serde(default = "default_dev")]
+    pub develop: bool,
+}
+
+fn default_dev() -> bool {
+    false
 }
 
 #[derive(Debug, Deserialize, Clone)]
 #[allow(unused)]
 pub struct BaseSettings {
     pub url: String,
-    pub rust_log: Option<String>
+    pub rust_log: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
