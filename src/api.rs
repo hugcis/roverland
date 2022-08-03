@@ -1,6 +1,7 @@
 use super::auth::CurrentUser;
 use axum::extract::Query;
 use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use serde::{
     de::{self, Deserializer},
@@ -11,8 +12,9 @@ use sqlx::postgres::PgRow;
 use sqlx::Row;
 use sqlx::{
     postgres::PgPool,
-    types::time::{Date, OffsetDateTime, PrimitiveDateTime},
+    types::time::{Date, PrimitiveDateTime},
 };
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -97,10 +99,11 @@ pub struct LocProps {
     wifi: String,
 }
 
-#[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, Copy, Default, Hash, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 #[sqlx(type_name = "BAT_TYPE", rename_all = "lowercase")]
-enum BatteryState {
+pub enum BatteryState {
+    #[default]
     Unknown,
     Charging,
     Full,
@@ -164,6 +167,14 @@ impl Default for TimePeriod {
     }
 }
 
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ResultType {
+    #[default]
+    Json,
+    GeoJSON,
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 #[serde(untagged)]
@@ -171,6 +182,8 @@ pub enum GeoQuery {
     Interval {
         start: String,
         end: String,
+        #[serde(default)]
+        result_type: ResultType,
     },
     Date {
         date: String,
@@ -179,31 +192,120 @@ pub enum GeoQuery {
     },
 }
 
-fn get_today_as_primitive_dt() -> Date {
-    let now = OffsetDateTime::now_utc();
-    now.date()
-}
-
-fn geoquery_to_primitive_datetime(geo_query: GeoQuery) -> (PrimitiveDateTime, PrimitiveDateTime) {
+fn geoquery_to_primitive_datetime(
+    geo_query: GeoQuery,
+) -> (PrimitiveDateTime, PrimitiveDateTime, ResultType) {
     println!("{:?}", geo_query);
     match geo_query {
         GeoQuery::Date { date, duration } => {
-            let offsetdt = date.map_or_else(get_today_as_primitive_dt, |tz| {
-                Date::parse(tz, "%F").unwrap()
-            });
-
+            let offsetdt = Date::parse(date, "%F").unwrap();
             let t_start = match duration {
                 TimePeriod::Day => offsetdt.midnight(),
                 TimePeriod::Week => offsetdt.midnight() - Duration::from_secs(3600 * 24 * 7),
                 TimePeriod::Month => offsetdt.midnight() - Duration::from_secs(3600 * 24 * 30),
             };
             let t_end = offsetdt.next_day().midnight();
-            (t_start, t_end)
+            (t_start, t_end, ResultType::Json)
         }
-        GeoQuery::Interval { start, end } => {
+        GeoQuery::Interval {
+            start,
+            end,
+            result_type,
+        } => {
             let start_dt = Date::parse(start, "%F").unwrap().midnight();
             let end_dt = Date::parse(end, "%F").unwrap().midnight();
-            (start_dt, end_dt)
+            (start_dt, end_dt, result_type)
+        }
+    }
+}
+
+type PositionTuple = (f32, f32, i16, f32, u8, String, u16);
+
+#[derive(Serialize)]
+pub struct PositionCollection {
+    wifis: Vec<String>,
+    states: Vec<BatteryState>,
+    devices: HashMap<String, Vec<PositionTuple>>,
+}
+
+fn dataobj_vec_to_internal(dobj_vec: Vec<DataObj>) -> PositionCollection {
+    let mut map = HashMap::new();
+    let mut wifi_map = HashMap::new();
+    let mut wifi_array = vec![];
+    let mut bstate_map = HashMap::new();
+    let mut bstate_array = vec![];
+
+    for obj in dobj_vec.iter() {
+        match obj {
+            DataObj::Feature {
+                geometry,
+                properties,
+            } => {
+                if let Props::LocProps(props) = properties {
+                    let id_str = props.user_id.as_ref().unwrap();
+                    if !map.contains_key(id_str) {
+                        map.insert(id_str.clone(), vec![]);
+                    }
+                    let id_vec = map.get_mut(id_str).unwrap();
+                    let battery_state = props.battery_state.unwrap_or_default();
+                    let bstate_index = if let Some(bstate_index) = bstate_map.get(&battery_state) {
+                        *bstate_index
+                    } else {
+                        let bstate_index = bstate_map.len();
+                        bstate_map.insert(battery_state, bstate_index);
+                        bstate_array.push(battery_state);
+                        bstate_index
+                    };
+                    let wifi = props.wifi.clone();
+                    let wifi_index = if let Some(wifi_index) = wifi_map.get(&wifi) {
+                        *wifi_index
+                    } else {
+                        let wifi_index = wifi_map.len();
+                        wifi_map.insert(wifi.clone(), wifi_index);
+                        wifi_array.push(wifi);
+                        wifi_index
+                    };
+
+                    match geometry {
+                        Geom::Point { coordinates } => {
+                            id_vec.push((
+                                coordinates[0] as f32,
+                                coordinates[1] as f32,
+                                props.altitude.unwrap_or(0),
+                                props.battery_level.unwrap_or(1.),
+                                bstate_index.try_into().unwrap_or_else(|_| {
+                                    tracing::error!("Index for battery state too high");
+                                    0
+                                }),
+                                props.timestamp.clone(),
+                                wifi_index.try_into().unwrap_or_else(|_| {
+                                    tracing::error!("Index for wifi too high");
+                                    0
+                                }),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    PositionCollection {
+        wifis: wifi_array,
+        states: bstate_array,
+        devices: map,
+    }
+}
+
+pub enum QueryPointResponse {
+    GeoJSON(Json<Vec<DataObj>>),
+    Json(Json<PositionCollection>),
+}
+
+impl IntoResponse for QueryPointResponse {
+    fn into_response(self) -> Response {
+        match self {
+            Self::GeoJSON(response) => response.into_response(),
+            Self::Json(response) => response.into_response(),
         }
     }
 }
@@ -212,8 +314,8 @@ pub async fn query_points(
     Query(geo_query): Query<GeoQuery>,
     Extension(pool): Extension<PgPool>,
     Extension(current_user): Extension<CurrentUser>,
-) -> Result<(StatusCode, Json<Vec<DataObj>>), (StatusCode, String)> {
-    let (t_start, t_end) = geoquery_to_primitive_datetime(geo_query);
+) -> Result<(StatusCode, QueryPointResponse), (StatusCode, String)> {
+    let (t_start, t_end, result_type) = geoquery_to_primitive_datetime(geo_query);
     let add_filter = if current_user.is_admin {
         "".to_string()
     } else {
@@ -274,8 +376,13 @@ pub async fn query_points(
             }
         })
         .collect();
-
-    Ok((StatusCode::OK, Json(res)))
+    match result_type {
+        ResultType::GeoJSON => Ok((StatusCode::OK, QueryPointResponse::GeoJSON(Json(res)))),
+        ResultType::Json => Ok((
+            StatusCode::OK,
+            QueryPointResponse::Json(Json(dataobj_vec_to_internal(res))),
+        )),
+    }
 }
 
 async fn insert_item(
@@ -336,7 +443,7 @@ pub async fn add_points(
                 properties,
             } => {
                 if let Props::LocProps(props) = properties {
-                    match insert_item(&geometry, &props, &pool, &current_user).await {
+                    match insert_item(geometry, props, &pool, &current_user).await {
                         Ok(_) => inserted += 1,
                         Err(e) => tracing::debug!("error inserting item: {e}"),
                     }
