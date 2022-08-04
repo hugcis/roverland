@@ -48,15 +48,21 @@ jobs:
           components: clippy
           override: true
 
-      - name: Initialize user database
-        run: psql -U postgres -h localhost -p 5432 -w < ./database/migrations/create_db.sql
+      - name: Create user database role
+        run: psql -U postgres -h localhost -p 5432 -w -c "CREATE ROLE overland with LOGIN ENCRYPTED PASSWORD ${DBPASSWORD};"
+        env:
+          PGPASSWORD: postgres
+          DBPASSWORD: ci_test_password
+          
+      - name: Create user database
+        run: psql -U postgres -h localhost -p 5432 -w -c "CREATE DATABASE overland_db ENCODING 'UTF8' OWNER overland;"
         env:
           PGPASSWORD: postgres
       
       - name: Run migrations
         run: psql -U overland -d overland_db -h localhost -p 5432 -w < ./database/migrations/init.sql
         env:
-          PGPASSWORD: overland-dev
+          PGPASSWORD: ci_test_password
 
       - name: Build the app
         # Runs a script that creates a PostgreSQL table, populates
