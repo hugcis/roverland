@@ -20,25 +20,25 @@ const myChart = new Chart(ctx, {
     data: {
         labels: [],
         datasets: [{
-            xAxisID: "xAxes",
-            yAxisID: "y",
-            label: 'Battery level',
-            data: [],
-            borderColor: 'rgb(243, 102, 102)',
-            fill: false,
-            tension: 1.,
-            borderWidth: 2.,
-            pointRadius: 0.,
-            showLine: true,
-        },
-        // {
-        //     type: "scatter",
-        //     label: "State",
-        //     xAxisID: "xAxes",
-        //     data: [],
-        //     barPercentage: 10.,
-        // },
-                  ]
+                xAxisID: "xAxes",
+                yAxisID: "y",
+                label: 'Battery level',
+                data: [],
+                borderColor: 'rgb(243, 102, 102)',
+                fill: false,
+                tension: 1.,
+                borderWidth: 2.,
+                pointRadius: 0.,
+                showLine: true,
+            },
+            // {
+            //     type: "scatter",
+            //     label: "State",
+            //     xAxisID: "xAxes",
+            //     data: [],
+            //     barPercentage: 10.,
+            // },
+        ]
     },
     options: {
         interaction: {
@@ -194,61 +194,67 @@ async function fetchDataJSON(dateStart, dateEnd) {
 }
 
 function drawGeoJSON(json) {
-    json.sort((obj1, obj2) => moment(obj1.properties.timestamp) - moment(obj2.properties.timestamp));
+    for (const device_name in json.devices) {
+        let json_device = json.devices[device_name];
+        json_device.sort((obj1, obj2) => moment(obj1[5]) - moment(obj2[5]));
+        let times = json_device.map((obj) => moment(obj[5]));
+        let timestamps = json_device.map((obj) => {
+            let date = moment(obj[5]);
+            return date.hour().toString() + ":" + date.minute().toString();
+        });
+        let time_max = Math.max(...times);
+        let time_min = Math.min(...times);
 
-    let times = json.map((obj) => moment(obj.properties.timestamp));
-    let timestamps = json.map((obj) => {
-        let date = moment(obj.properties.timestamp);
-        return date.hour().toString() + ":" + date.minute().toString();
-    });
-    let time_max = Math.max(...times);
-    let time_min = Math.min(...times);
+        let battery_vals = json_device.map((obj) => {
+            return {
+                x: moment(obj[5]),
+                y: obj[3],
+            };
+        });
+        let battery_states = json_device.map((obj) => json.states[obj[4]]);
 
-    let battery_vals = json.map((obj) => {
-        return {
-            x: moment(obj.properties.timestamp),
-            y: obj.properties.battery_level,
-        };
-    });
-    let battery_states = json.map((obj) => obj.properties.battery_state);
+        let coords = json_device.map((d) => [d[1], d[0]]);
+        let max_coords = coords.reduce(function(a, b) {
+            return [Math.max(a[0], b[0]), Math.max(a[1], b[1])];
+        }, [-Infinity, -Infinity]);
+        let min_coords = coords.reduce(function(a, b) {
+            return [Math.min(a[0], b[0]), Math.min(a[1], b[1])];
+        }, [Infinity, Infinity]);
+        map.setView([(max_coords[0] + min_coords[0]) / 2,
+            (max_coords[1] + min_coords[1]) / 2
+        ]);
 
-    let coords = json.map((d) => [d.geometry.coordinates[1], d.geometry.coordinates[0]]);
-    let max_coords = coords.reduce(function(a, b) {
-        return [Math.max(a[0], b[0]), Math.max(a[1], b[1])];
-    }, [-Infinity, -Infinity]);
-    let min_coords = coords.reduce(function(a, b) {
-        return [Math.min(a[0], b[0]), Math.min(a[1], b[1])];
-    }, [Infinity, Infinity]);
-    map.setView([(max_coords[0] + min_coords[0]) / 2,
-        (max_coords[1] + min_coords[1]) / 2
-    ]);
+        overlayLayer = L.geoJSON(makeGeoJSONFromAray(coords, times), {
+
+            style: function(feature) {
+                return feature.properties && feature.properties.style;
+            },
+            onEachFeature: onEachFeature,
+            pointToLayer: function(feature, latlng) {
+                let dtime = Date.parse(feature.properties.datetime);
+                let percent = (dtime - time_min) / (time_max - time_min);
+                let color = "rgb(" + (percent * 255) + ", " + (120 * percent) + ", " + ((1 - percent) * 255) + ")";
+                return L.circleMarker(latlng, {
+                    radius: 3,
+                    fillColor: color,
+                    weight: 0,
+                    opacity: 0.5,
+                    fillOpacity: 0.5
+                });
+            }
+        }).addTo(map);
+        map.fitBounds(overlayLayer.getBounds());
+
+        myChart.data.datasets[0].data = battery_vals;
+        // myChart.data.datasets[1].data = battery_states;
+        myChart.data.labels = timestamps;
+        myChart.update();
+
+        break;
+    }
+
     // let line = L.polyline(coords).addTo(map);
 
-    overlayLayer = L.geoJSON(json, {
-
-        style: function(feature) {
-            return feature.properties && feature.properties.style;
-        },
-        onEachFeature: onEachFeature,
-        pointToLayer: function(feature, latlng) {
-            let dtime = Date.parse(feature.properties.timestamp);
-            let percent = (dtime - time_min) / (time_max - time_min);
-            let color = "rgb(" + (percent * 255) + ", " + (120 * percent) + ", " + ((1 - percent) * 255) + ")";
-            return L.circleMarker(latlng, {
-                radius: 3,
-                fillColor: color,
-                weight: 0,
-                opacity: 0.5,
-                fillOpacity: 0.5
-            });
-        }
-    }).addTo(map);
-    map.fitBounds(overlayLayer.getBounds());
-
-    myChart.data.datasets[0].data = battery_vals;
-    // myChart.data.datasets[1].data = battery_states;
-    myChart.data.labels = timestamps;
-    myChart.update();
 }
 
 function updateData(dateStart, dateEnd) {
@@ -259,6 +265,22 @@ function updateData(dateStart, dateEnd) {
         .then(drawGeoJSON)
         .catch(err => console.error(`Error fetching data: ${err.message}`));
 
+}
+
+function makeGeoJSONFromAray(coords, times) {
+    return coords.map((d, t) => {
+        return {
+            "type": 'Feature',
+            "geometry": {
+                "type": 'Point',
+                "coordinates": [d[1], d[0]],
+            },
+            "properties": {
+                "datetime": times[t]
+            },
+
+        };
+    });
 }
 
 

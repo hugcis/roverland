@@ -42,7 +42,7 @@ impl Settings {
             .add_source(File::with_name("config/default"))
             .add_source(File::with_name(".env").required(false))
             .add_source(File::with_name("config/local").required(false))
-            .add_source(Environment::with_prefix("ROV"))
+            .add_source(Environment::with_prefix("rov"))
             .build()?;
         s.try_deserialize()
     }

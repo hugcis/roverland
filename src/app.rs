@@ -62,6 +62,15 @@ pub async fn run_server() -> Result<(), sqlx::Error> {
 #[template(path = "index.html")]
 struct WelcomTemplate {}
 
+#[derive(Template)]
+#[template(path = "map.html")]
+struct MapTemplate {}
+
+#[derive(Template)]
+#[template(path = "register.html")]
+struct RegisterTemplate {}
+
+
 fn app(pool: PgPool, shared_pdb: SharedPdb) -> Router {
     let api_routes = Router::new()
         .route("/query", get(query_points))
@@ -72,17 +81,16 @@ fn app(pool: PgPool, shared_pdb: SharedPdb) -> Router {
         .layer(Extension(shared_pdb.clone()));
     let register_routes = Router::new().nest(
         "/",
-        get_service(ServeDir::new("./static/register")).handle_error(handle_static_error),
+        get(|| async { HtmlTemplate(RegisterTemplate {}) })
     );
     let add_user_routes = Router::new()
         .route("/", post(insert_username_password))
         .layer(Extension(shared_pdb.clone()));
 
+    let map_routes = Router::new().route("/", get(|| async { HtmlTemplate(MapTemplate {}) }));
+
     Router::new()
-        .nest(
-            "/map",
-            get_service(ServeDir::new("./static/map")).handle_error(handle_static_error),
-        )
+        .nest("/map", map_routes)
         .nest("/api", api_routes)
         .route_layer(middleware::from_fn(move |req, next| {
             auth_middleware(req, next, shared_pdb.clone())
@@ -91,6 +99,10 @@ fn app(pool: PgPool, shared_pdb: SharedPdb) -> Router {
         .nest("/login", login_routes)
         .nest("/register", register_routes)
         .nest("/add_user", add_user_routes)
+        .nest(
+            "/public",
+            get_service(ServeDir::new("./static")).handle_error(handle_static_error),
+        )
         .fallback(fallback.into_service())
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
 }
