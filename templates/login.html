@@ -3,22 +3,38 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
+<div class="flex justify-center">
+    <a href="/" class="h-auto max-w-screen-sm shrink">
+        <img src="/public/img/logo.png" class="shrink px-12 py-6 h-auto max-w-screen-sm object-center"/>
+    </a>
+</div>
+
 <form action="/login{% if url.is_some() %}?redirect={{url.as_ref().unwrap()}}{% endif %}" method="post">
-<div class="container">
-<label for="username"><b>Username</b></label>
-<input type="text" placeholder="Enter Username" name="username" required>
+    <div class="flex flex-col justify-center">
+            <div class="mx-auto px-4 mb-4">
+        <div>
+            <label for="username"><b>Username</b></label>
+        </div>
+        <div>
+            <input type="text" placeholder="Enter Username"
+                   name="username" class="p-2 border-2 max-w-full min-w-[60%]" required>
+        </div>
+        </div>
+        <div class="mx-auto px-4 mb-4">
+        <div>
+            <label for="password"><b>Password</b></label>
+        </div>
+        <div>
+            <input type="password" placeholder="Enter Password" name="password" class="p-2 border-2" required>
+        </div>
+        </div>
 
-<label for="password"><b>Password</b></label>
-<input type="password" placeholder="Enter Password" name="password" required>
-
-<button type="submit">Login</button>
-<label>
-    <input type="checkbox" checked="checked" name="remember"> Remember me
-</label>
-</div>
-
-<div class="container" style="background-color:#f1f1f1">
-    <button type="button" class="cancelbtn">Cancel</button>
-</div>
+        <div class="mb-4 flex justify-center items-center">
+            <button type="submit" class="mx-6 font-bold border-blue-600 text-white bg-blue-600 hover:border-blue-800 hover:bg-blue-800 border-4 px-1 rounded">Login</button>
+            <label class="mx-6">
+                <input type="checkbox" checked="checked" name="remember"> Remember me
+            </label>
+        </div>
+        </div>
 </form>
  {% endblock %}
