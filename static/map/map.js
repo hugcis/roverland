@@ -177,8 +177,8 @@ function PreviousDate() {
 function onEachFeature(feature, layer) {
     var popupContent = "";
     if (feature.properties) {
-        if (feature.properties.timestamp) {
-            popupContent += "<p><b>" + feature.properties.timestamp + "</b></p>";
+        if (feature.properties.datetime) {
+            popupContent += "<p><b>" + feature.properties.datetime.format() + "</b></p>";
         }
         if (feature.properties.speed) {
             popupContent += "<p>" + 3.6 * feature.properties.speed + " km/h</p>";
