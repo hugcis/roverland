@@ -68,3 +68,5 @@ jobs:
         # Runs a script that creates a PostgreSQL table, populates
         # the table with data, and then retrieves the data
         run: cargo build
+        env: 
+          DATABASE_URL: "postgres://overland:ci_test_password@localhost/overland_db"
