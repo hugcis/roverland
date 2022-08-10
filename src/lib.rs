@@ -1,3 +1,4 @@
+#![deny(missing_docs)]
 pub mod api;
 mod app;
 pub mod auth;
@@ -16,7 +17,9 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use std::fmt::Display;
 
-pub async fn handle_static_error<T: Display>(error: T) -> (StatusCode, HeaderMap, String) {
+/// This function is a fallback to handle errors and return responses that is
+/// used in several place in the code.
+pub async fn handle_static_error<T: Display>(error: T) -> impl IntoResponse {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         HeaderMap::new(),

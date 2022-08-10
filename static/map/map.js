@@ -13,6 +13,20 @@ var tiles = L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}
 let dateStart = moment().startOf('day');
 let dateEnd = dateStart.clone().add(1, "days");
 let overlayLayer = null;
+let available = null;
+
+async function fetchAvailableDates() {
+    const response = await fetch(baseUrl + "/api/available");
+    const content = await response.json();
+    return content.map((strDate) => moment(strDate));
+}
+
+
+fetchAvailableDates().then((val) => {
+    available = val;
+    colorCalendar(available);
+});
+
 
 const ctx = document.getElementById('chart').getContext('2d');
 const myChart = new Chart(ctx, {
@@ -131,6 +145,8 @@ L.Control.DatePicker = L.Control.extend({
               <input type="text" name="daterange-picker" class="form-control">
             </center>
           </div>`;
+
+
         return controlDiv;
     }
 });
@@ -138,6 +154,17 @@ L.control.datePicker = function(options) {
     return new L.Control.DatePicker(options);
 };
 L.control.datePicker({}).addTo(map);
+
+function colorCalendar(dates) {
+    let datepicker = document.getElementsByClassName("daterangepicker")[0];
+    let current_month = datepicker.getElementsByClassName("drp-calendar left")[0];
+    let date = moment();
+    let month_year_str = current_month.getElementsByClassName("month")[0].innerHTML.split(" ");
+    date.month(month_year_str[0]).year(month_year_str[0]);
+    let tbody = current_month.getElementsByClassName("table-condensed")[0].children[1];
+    var days = [...tbody.getElementsByClassName("available")].filter((item) => !item.className.includes("ends"));
+
+}
 
 $(function() {
     $('input[name="daterange-picker"]').daterangepicker({
@@ -173,20 +200,6 @@ function PreviousDate() {
     updateData(dateStart, dateEnd);
 }
 
-
-function onEachFeature(feature, layer) {
-    var popupContent = "";
-    if (feature.properties) {
-        if (feature.properties.datetime) {
-            popupContent += "<p><b>" + feature.properties.datetime.format() + "</b></p>";
-        }
-        if (feature.properties.speed) {
-            popupContent += "<p>" + 3.6 * feature.properties.speed + " km/h</p>";
-        }
-    }
-    layer.bindPopup(popupContent);
-}
-
 async function fetchDataJSON(dateStart, dateEnd) {
     const response = await fetch(baseUrl + "/api/query?start=" + dateStart.format() + "&end=" + dateEnd.format());
     const content = await response.json();
@@ -212,6 +225,7 @@ function drawGeoJSON(json) {
             };
         });
         let battery_states = json_device.map((obj) => json.states[obj[4]]);
+        let speeds = json_device.map((obj) => obj[7]);
 
         let coords = json_device.map((d) => [d[1], d[0]]);
         let max_coords = coords.reduce(function(a, b) {
@@ -224,25 +238,29 @@ function drawGeoJSON(json) {
             (max_coords[1] + min_coords[1]) / 2
         ]);
 
-        overlayLayer = L.geoJSON(makeGeoJSONFromAray(coords, times), {
+        overlayLayer = L.featureGroup(coords.map((coord, index) => {
+            let dtime = Date.parse(times[index]);
+            let percent = (dtime - time_min) / (time_max - time_min);
+            let color = "rgb(" + (percent * 255) + ", " + (120 * percent) + ", " + ((1 - percent) * 255) + ")";
 
-            style: function(feature) {
-                return feature.properties && feature.properties.style;
-            },
-            onEachFeature: onEachFeature,
-            pointToLayer: function(feature, latlng) {
-                let dtime = Date.parse(feature.properties.datetime);
-                let percent = (dtime - time_min) / (time_max - time_min);
-                let color = "rgb(" + (percent * 255) + ", " + (120 * percent) + ", " + ((1 - percent) * 255) + ")";
-                return L.circleMarker(latlng, {
-                    radius: 3,
-                    fillColor: color,
-                    weight: 0,
-                    opacity: 0.5,
-                    fillOpacity: 0.5
-                });
+            let popupContent = "";
+            if (times[index]) {
+                popupContent += "<p><b>" + times[index].format() + "</b></p>";
             }
-        }).addTo(map);
+            if (speeds[index] > 0) {
+                popupContent += "<p>" + 3.6 * speeds[index] + " km/h</p>";
+            }
+
+
+            return L.circleMarker([coord[0], coord[1]], {
+                radius: 3,
+                fillColor: color,
+                weight: 0,
+                opacity: 0.5,
+                fillOpacity: 0.5,
+                tooltip: popupContent,
+            });
+        })).bindPopup((circle) => circle.options.tooltip).addTo(map);
         map.fitBounds(overlayLayer.getBounds());
 
         myChart.data.datasets[0].data = battery_vals;
@@ -250,10 +268,10 @@ function drawGeoJSON(json) {
         myChart.data.labels = timestamps;
         myChart.update();
 
+        // let line = L.polyline(coords).addTo(map);
         break;
     }
 
-    // let line = L.polyline(coords).addTo(map);
 
 }
 
@@ -266,22 +284,4 @@ function updateData(dateStart, dateEnd) {
         .catch(err => console.error(`Error fetching data: ${err.message}`));
 
 }
-
-function makeGeoJSONFromAray(coords, times) {
-    return coords.map((d, t) => {
-        return {
-            "type": 'Feature',
-            "geometry": {
-                "type": 'Point',
-                "coordinates": [d[1], d[0]],
-            },
-            "properties": {
-                "datetime": times[t]
-            },
-
-        };
-    });
-}
-
-
 updateData(dateStart, dateEnd);

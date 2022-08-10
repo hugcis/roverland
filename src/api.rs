@@ -1,3 +1,4 @@
+/// The API module containing all the API method implementations
 use super::auth::CurrentUser;
 use axum::extract::Query;
 use axum::http::StatusCode;
@@ -8,15 +9,15 @@ use serde::{
     {Deserialize, Serialize},
 };
 use serde_json::Value;
-use sqlx::postgres::PgRow;
 use sqlx::Row;
 use sqlx::{
-    postgres::PgPool,
+    postgres::{PgPool, PgRow},
     types::time::{Date, PrimitiveDateTime},
 };
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
+use time::macros::format_description;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
@@ -195,16 +196,16 @@ pub enum GeoQuery {
 fn geoquery_to_primitive_datetime(
     geo_query: GeoQuery,
 ) -> (PrimitiveDateTime, PrimitiveDateTime, ResultType) {
-    println!("{:?}", geo_query);
+    let formatter = format_description!("[year]-[month]-[day]T[hour]:[minute]:[second] 00:00");
     match geo_query {
         GeoQuery::Date { date, duration } => {
-            let offsetdt = Date::parse(date, "%F").unwrap();
+            let offsetdt = Date::parse(&date, formatter).unwrap();
             let t_start = match duration {
                 TimePeriod::Day => offsetdt.midnight(),
                 TimePeriod::Week => offsetdt.midnight() - Duration::from_secs(3600 * 24 * 7),
                 TimePeriod::Month => offsetdt.midnight() - Duration::from_secs(3600 * 24 * 30),
             };
-            let t_end = offsetdt.next_day().midnight();
+            let t_end = offsetdt.next_day().unwrap().midnight();
             (t_start, t_end, ResultType::Json)
         }
         GeoQuery::Interval {
@@ -212,14 +213,15 @@ fn geoquery_to_primitive_datetime(
             end,
             result_type,
         } => {
-            let start_dt = Date::parse(start, "%F").unwrap().midnight();
-            let end_dt = Date::parse(end, "%F").unwrap().midnight();
+            println!("{}", start);
+            let start_dt = Date::parse(&start, formatter).unwrap().midnight();
+            let end_dt = Date::parse(&end, formatter).unwrap().midnight();
             (start_dt, end_dt, result_type)
         }
     }
 }
 
-type PositionTuple = (f32, f32, i16, f32, u8, String, u16);
+type PositionTuple = (f32, f32, i16, f32, u8, String, u16, i32);
 
 #[derive(Serialize)]
 pub struct PositionCollection {
@@ -282,6 +284,7 @@ fn dataobj_vec_to_internal(dobj_vec: Vec<DataObj>) -> PositionCollection {
                                     tracing::error!("Index for wifi too high");
                                     0
                                 }),
+                                props.speed.unwrap_or(0),
                             ));
                         }
                     }
@@ -310,26 +313,59 @@ impl IntoResponse for QueryPointResponse {
     }
 }
 
+fn filter_results(current_user: CurrentUser) -> String {
+    if current_user.is_admin {
+        "".to_string()
+    } else {
+        format!("AND user_identifier={}", current_user.user_id)
+    }
+}
+
+pub async fn available(
+    Extension(pool): Extension<PgPool>,
+    Extension(current_user): Extension<CurrentUser>,
+) -> Result<(StatusCode, Json<Vec<String>>), (StatusCode, String)> {
+    let formatter = format_description!("[year]-[month]-[day]");
+    let res: Vec<Date> = sqlx::query(&format!(
+        r#"SELECT DISTINCT DATE(time_id) AS single_day FROM points {};"#,
+        filter_results(current_user)
+    ))
+    .map(|row: PgRow| -> sqlx::Result<sqlx::types::time::Date> {
+        let tget = row.try_get("single_day");
+        println!("{:?}", tget);
+        tget
+    })
+    .fetch_all(&pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .collect::<sqlx::Result<Vec<Date>>>()
+    .unwrap();
+    let formatted_dates = res
+        .iter()
+        .map(|dt| dt.clone().format(&formatter))
+        .collect::<Result<Vec<String>, time::error::Format>>()
+        .unwrap();
+    Ok((StatusCode::OK, Json(formatted_dates)))
+}
+
 pub async fn query_points(
     Query(geo_query): Query<GeoQuery>,
     Extension(pool): Extension<PgPool>,
     Extension(current_user): Extension<CurrentUser>,
 ) -> Result<(StatusCode, QueryPointResponse), (StatusCode, String)> {
     let (t_start, t_end, result_type) = geoquery_to_primitive_datetime(geo_query);
-    let add_filter = if current_user.is_admin {
-        "".to_string()
-    } else {
-        format!("AND user_identifier={}", current_user.user_id)
-    };
+    let format = format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
     let request = format!(
         r#"SELECT user_id, time_id, altitude, speed, motion, battery, battery_level,
             wifi, coords_x, coords_y FROM points WHERE time_id BETWEEN TO_TIMESTAMP('{}',
             'YYYY-MM-DD HH24:MI:SS') AND TO_TIMESTAMP('{}',
             'YYYY-MM-DD HH24:MI:SS') {};"#,
-        t_start.format("%F %T"),
-        t_end.format("%F %T"),
-        add_filter
+        t_start.format(&format).unwrap(),
+        t_end.format(&format).unwrap(),
+        filter_results(current_user)
     );
+    let format_date = format_description!("[year]-[month]-[day]");
     let res: Vec<DataObj> = sqlx::query(&request)
         .map(|row: PgRow| -> sqlx::Result<DataObj> {
             let ts: PrimitiveDateTime = row.try_get("time_id")?;
@@ -344,7 +380,7 @@ pub async fn query_points(
                     user_id: row.try_get("user_id")?,
                     timestamp: format!(
                         "{}T{:02}:{:02}:{:02}Z",
-                        ts.format("%F"),
+                        ts.format(&format_date).unwrap(),
                         ts.hour(),
                         ts.minute(),
                         ts.second()
@@ -394,7 +430,8 @@ async fn insert_item(
     let point = match geometry {
         Geom::Point { coordinates } => coordinates,
     };
-    let offsetdt = PrimitiveDateTime::parse(props.timestamp.clone(), "%FT%TZ").unwrap();
+    let format = format_description!("[year]-[month]-[day]T[hour]:[minute]:[second]Z");
+    let offsetdt = PrimitiveDateTime::parse(&props.timestamp, format).unwrap();
     let user_id = props.user_id.clone().unwrap_or_default();
 
     sqlx::query!(

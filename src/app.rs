@@ -1,4 +1,4 @@
-use crate::api::{add_points, query_points};
+use crate::api::{add_points, available, query_points};
 use crate::auth::{
     auth_middleware, check_username_password, insert_username_password, serve_login,
 };
@@ -16,6 +16,7 @@ use axum::{
 };
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use std::convert::Infallible;
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, trace::TraceLayer};
@@ -70,19 +71,17 @@ struct MapTemplate {}
 #[template(path = "register.html")]
 struct RegisterTemplate {}
 
-
 fn app(pool: PgPool, shared_pdb: SharedPdb) -> Router {
     let api_routes = Router::new()
         .route("/query", get(query_points))
         .route("/input", post(add_points))
+        .route("/available", get(available))
         .layer(Extension(pool));
     let login_routes = Router::new()
         .route("/", get(serve_login).post(check_username_password))
         .layer(Extension(shared_pdb.clone()));
-    let register_routes = Router::new().nest(
-        "/",
-        get(|| async { HtmlTemplate(RegisterTemplate {}) })
-    );
+    let register_routes =
+        Router::new().nest("/", get(|| async { HtmlTemplate(RegisterTemplate {}) }));
     let add_user_routes = Router::new()
         .route("/", post(insert_username_password))
         .layer(Extension(shared_pdb.clone()));
@@ -108,5 +107,5 @@ fn app(pool: PgPool, shared_pdb: SharedPdb) -> Router {
 }
 
 async fn fallback(uri: Uri) -> impl IntoResponse {
-    (StatusCode::NOT_FOUND, format!("No page found for {}", uri))
+    StatusCode::NOT_FOUND
 }
