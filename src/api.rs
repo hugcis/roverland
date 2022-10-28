@@ -1,4 +1,5 @@
-/// The API module containing all the API method implementations
+/// The API module contains all the API method implementations for the REST
+/// server.
 use super::auth::CurrentUser;
 use axum::extract::Query;
 use axum::http::StatusCode;
@@ -19,16 +20,31 @@ use std::str::FromStr;
 use std::time::Duration;
 use time::macros::format_description;
 
+/// The DataObj enum represents the objects received by a client containing the
+/// locations of the user.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 pub enum DataObj {
-    Feature { geometry: Geom, properties: Props },
+    /// The Feature corresponds to a GeoJSON feature object. It contains a
+    /// `geometry` object with the object type and coordinates and the
+    /// `properties` containing options for the object.
+    Feature {
+        /// The `geometry` object.
+        geometry: Geom,
+        /// The `properties` object.
+        properties: Props,
+    },
 }
 
+/// The GeoJSON properties can be of two type: single location properties
+/// `LocProps` or trip-properties `TripProps`. These correspond to the two types
+/// of object that the Overland iOS app client can send.
 #[derive(Serialize, Debug)]
 #[serde(tag = "type")]
 pub enum Props {
+    /// A single location property object.
     LocProps(LocProps),
+    /// A trip property object.
     TripProps(TripProps),
 }
 
@@ -57,6 +73,8 @@ impl<'de> Deserialize<'de> for Props {
     }
 }
 
+/// A trip properties object, containing the starting and ending point of the
+/// trip and some additional properties.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename = "trip")]
 pub struct TripProps {
@@ -75,6 +93,7 @@ pub struct TripProps {
     wifi: String,
 }
 
+/// A location properties object.
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Default)]
 #[serde(rename = "position")]
 pub struct LocProps {
@@ -100,14 +119,19 @@ pub struct LocProps {
     wifi: String,
 }
 
+/// The `BatteryState` returned from the Overland app can take a few values.
 #[derive(sqlx::Type, Serialize, Deserialize, Debug, Clone, Copy, Default, Hash, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 #[sqlx(type_name = "BAT_TYPE", rename_all = "lowercase")]
 pub enum BatteryState {
     #[default]
+    /// Battery state unknown
     Unknown,
+    /// Battery is charging
     Charging,
+    /// Battery is full but plugged in
     Full,
+    /// Battery is unplugged
     Unplugged,
 }
 
@@ -137,10 +161,15 @@ impl FromStr for Motion {
     }
 }
 
+/// A geometry object that contains geometric properties of a GeoJSON object.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 pub enum Geom {
-    Point { coordinates: [f64; 2] },
+    /// The geometry is a point.
+    Point {
+        /// Latitude and longitude of the point.
+        coordinates: [f64; 2],
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -148,17 +177,22 @@ struct Locations {
     locations: Vec<DataObj>,
 }
 
+/// This is the standard response to an `add_points` POST request.
 #[derive(Serialize)]
 pub struct OverlandResponse {
     result: String,
     saved: i32,
 }
 
+/// A time period interval for the `GeoQuery::Interval` object.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum TimePeriod {
+    /// One day time period.
     Day,
+    /// One week time period.
     Week,
+    /// One month time period.
     Month,
 }
 
@@ -168,26 +202,51 @@ impl Default for TimePeriod {
     }
 }
 
+/// An enum representing the required result type for the returned data from a
+/// query.
 #[derive(Deserialize, Debug, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ResultType {
+    /// This is the internal Json type.
     #[default]
     Json,
+    /// Standard GeoJSON type.
     GeoJSON,
 }
 
+/// An enum representing the response type that corresponds to the queried
+/// `ResultType`.
+pub enum QueryPointResponse {
+    /// The GeoJSON variant contains an axum Json representation of a `Vec` of
+    /// `DataObj`.
+    GeoJSON(Json<Vec<DataObj>>),
+    /// The Json variant is a Json representaion of a `PositionCollection`.
+    Json(Json<PositionCollection>),
+}
+
+/// A GeoQuey is a query parameter group that can either be an interval with a
+/// start date and end date or a single date (`TimePeriod::Day`,
+/// `TimePeriod::Month`, etc.) request.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 #[serde(untagged)]
 pub enum GeoQuery {
+    /// An Interval geo query type.
     Interval {
+        /// The start date of the interval. The expected format is
+        /// `[year]-[month]-[day]T[hour]:[minute]:[second] :00`
         start: String,
+        /// The end date of the interval.
         end: String,
+        /// Results can be required to be in any of the `ResultType`.
         #[serde(default)]
         result_type: ResultType,
     },
+    /// An single day geo query type.
     Date {
+        /// The starting date of the required data.
         date: String,
+        /// The duration of the required data
         #[serde(default)]
         duration: TimePeriod,
     },
@@ -223,6 +282,8 @@ fn geoquery_to_primitive_datetime(
 
 type PositionTuple = (f32, f32, i16, f32, u8, String, u16, i32);
 
+/// The position collection format. Used to encode a long list of positions more
+/// efficiently than with a GeoJSON.
 #[derive(Serialize)]
 pub struct PositionCollection {
     wifis: Vec<String>,
@@ -299,11 +360,6 @@ fn dataobj_vec_to_internal(dobj_vec: Vec<DataObj>) -> PositionCollection {
     }
 }
 
-pub enum QueryPointResponse {
-    GeoJSON(Json<Vec<DataObj>>),
-    Json(Json<PositionCollection>),
-}
-
 impl IntoResponse for QueryPointResponse {
     fn into_response(self) -> Response {
         match self {
@@ -321,6 +377,7 @@ fn filter_results(current_user: CurrentUser) -> String {
     }
 }
 
+/// API method to get the dates with existing data for a specific user.
 pub async fn available(
     Extension(pool): Extension<PgPool>,
     Extension(current_user): Extension<CurrentUser>,
@@ -343,12 +400,13 @@ pub async fn available(
     .unwrap();
     let formatted_dates = res
         .iter()
-        .map(|dt| dt.clone().format(&formatter))
+        .map(|dt| (*dt).format(&formatter))
         .collect::<Result<Vec<String>, time::error::Format>>()
         .unwrap();
     Ok((StatusCode::OK, Json(formatted_dates)))
 }
 
+/// API method to query positions from the database for a specific user.
 pub async fn query_points(
     Query(geo_query): Query<GeoQuery>,
     Extension(pool): Extension<PgPool>,
@@ -460,6 +518,8 @@ async fn insert_item(
     .await
 }
 
+/// API method to insert new points into the DB. This is called when POST-ing
+/// new data from the app.
 pub async fn add_points(
     body: String,
     Extension(pool): Extension<PgPool>,

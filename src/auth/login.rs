@@ -46,11 +46,13 @@ pub struct LogIn {
     remember: String,
 }
 
+/// The login template page method.
 pub async fn serve_login(Query(url_query): Query<RedirectUrlQuery>) -> impl IntoResponse {
     let template = LoginTemplate { url: url_query.redirect };
     (StatusCode::OK, HtmlTemplate(template))
 }
 
+/// The method called by a login form POST request. Authentifies a user.
 pub async fn check_username_password(
     form: Form<LogIn>,
     Extension(pdb): Extension<SharedPdb>,

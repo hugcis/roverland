@@ -14,8 +14,11 @@ use tokio::sync::Mutex;
 
 const INPUT_TOKEN_LEN: usize = 64;
 
+/// An `Arc<Mutex<>>` of the `PasswordDatabase`. It is an in-memory inventory of
+/// authentified users, cookie sessions, etc.
 pub type SharedPdb = Arc<Mutex<PasswordDatabase>>;
 
+/// Constructor for a `SharePdb` from a database pool connection.
 pub fn new_shared_db(db_pool: &PgPool) -> SharedPdb {
     Arc::new(Mutex::new(PasswordDatabase::new(db_pool)))
 }
@@ -89,14 +92,18 @@ impl PasswordStorage {
     }
 }
 
+/// A password database storing user session details.
 #[derive(Clone)]
 pub struct PasswordDatabase {
     storage: PasswordStorage,
+    /// User sessions.
     pub sessions: Vec<CookieSession>,
-    pub develop_mode: bool,
+    /// Development mode flag for bypassing authentication when developing.
+    develop_mode: bool,
 }
 
 impl PasswordDatabase {
+    /// Constructs a new `PasswordDatabase` object from a database connection.
     pub fn new(db_pool: &PgPool) -> PasswordDatabase {
         PasswordDatabase {
             storage: PasswordStorage {
@@ -107,14 +114,22 @@ impl PasswordDatabase {
         }
     }
 
+    /// Activate the development mode.
     pub fn set_develop(&mut self) {
         self.develop_mode = true;
     }
 
+    /// Activate the development mode.
+    pub fn is_develop(&self) -> bool {
+        self.develop_mode
+    }
+
+    /// Get a reference to this `PasswordDatabase` database pool connection.
     pub fn pool(&self) -> &PgPool {
         &self.storage.pool
     }
 
+    /// This will store a new password during registration into the database.
     pub async fn store_password(
         &self,
         sign_up: SignUp,
@@ -141,6 +156,7 @@ impl PasswordDatabase {
         }
     }
 
+    /// This will verify the password and username in the database.
     pub async fn verify_password(
         &self,
         username: &str,

@@ -4,6 +4,7 @@ use rand::Rng;
 
 const REGISTER_TOKEN_LEN: usize = 64;
 
+/// Adds a registration token and prints it to stdout.
 pub async fn add_register_token() -> Result<(), sqlx::Error> {
     let settings = Settings::new().unwrap();
 
@@ -28,6 +29,7 @@ pub async fn add_register_token() -> Result<(), sqlx::Error> {
     )
     .execute(&pool)
     .await?;
+    println!("The token in: {}", register_token);
 
     Ok(())
 }

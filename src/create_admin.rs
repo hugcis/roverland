@@ -2,6 +2,7 @@ use crate::auth::{PasswordDatabase, SignUp};
 use crate::settings::Settings;
 use sqlx::postgres::PgPoolOptions;
 
+/// Creates an administrator user directly from the command line.
 pub async fn create_admin() -> Result<(), sqlx::Error> {
     let settings = Settings::new().unwrap();
 

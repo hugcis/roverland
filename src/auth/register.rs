@@ -9,14 +9,19 @@ pub enum RegisterError {
     Password,
 }
 
+/// A registration request object, with a username, password and token.
 #[derive(Deserialize)]
 pub struct SignUp {
+    /// Username
     pub username: String,
+    /// Password
     pub password: String,
+    /// Registration token (optional, for restricted registration)
     pub token: Option<String>,
 }
 
 impl SignUp {
+    /// Creates a new `Signup` object.
     pub fn new(username: &str, password: &str, token: Option<&str>) -> SignUp {
         SignUp {
             username: username.to_string(),
@@ -26,6 +31,7 @@ impl SignUp {
     }
 }
 
+/// This function inserts a new user in the database.
 pub async fn insert_username_password(
     form: Form<SignUp>,
     Extension(pdb): Extension<SharedPdb>,

@@ -1,10 +1,18 @@
 #![deny(missing_docs)]
+
+//! This crate contains the server and API for the roverland app.
+
+/// The API module contains all the API method implementations for the REST
+/// server.
 pub mod api;
-mod app;
+/// Module containing all the authentication, registration, cookies, etc. logic.
 pub mod auth;
+/// This module is used to parse and read from configuration files for the
+/// server.
+pub mod settings;
+mod app;
 mod create_admin;
 mod register_token;
-pub mod settings;
 
 pub use app::run_server;
 pub use create_admin::create_admin;

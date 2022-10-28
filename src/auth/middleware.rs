@@ -51,10 +51,12 @@ fn get_cookie_map<B>(req: &Request<B>) -> HashMap<String, String> {
         .unwrap_or_default()
 }
 
+/// Authentification middleware function. Checks if a user is identified before
+/// serving response.
 pub async fn auth<B>(mut req: Request<B>, next: Next<B>, pdb: SharedPdb) -> impl IntoResponse {
     {
         let lock = pdb.lock().await;
-        if lock.develop_mode {
+        if lock.is_develop() {
             let current_user = CurrentUser {
                 user_id: 1,
                 is_admin: true,

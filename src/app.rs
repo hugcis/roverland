@@ -8,7 +8,7 @@ use crate::{handle_static_error, HtmlTemplate};
 use askama::Template;
 use axum::{
     handler::Handler,
-    http::{StatusCode, Uri},
+    http::StatusCode,
     middleware,
     response::IntoResponse,
     routing::{get, get_service, post},
@@ -16,7 +16,6 @@ use axum::{
 };
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
-use std::convert::Infallible;
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, trace::TraceLayer};
@@ -24,6 +23,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 struct EnvError {}
 
+/// Runs the server. Main entrypoint for the server app.
 pub async fn run_server() -> Result<(), sqlx::Error> {
     let settings = Settings::new().unwrap();
 
@@ -106,6 +106,6 @@ fn app(pool: PgPool, shared_pdb: SharedPdb) -> Router {
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
 }
 
-async fn fallback(uri: Uri) -> impl IntoResponse {
+async fn fallback() -> impl IntoResponse {
     StatusCode::NOT_FOUND
 }
