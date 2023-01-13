@@ -13,18 +13,20 @@ var tiles = L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}
 let dateStart = moment().startOf('day');
 let dateEnd = dateStart.clone().add(1, "days");
 let overlayLayer = null;
-let available = null;
+let available_dates = null;
 
 async function fetchAvailableDates() {
     const response = await fetch(baseUrl + "/api/available");
     const content = await response.json();
-    return content.map((strDate) => moment(strDate));
+    let available_dates = content.map((strDate) => moment(strDate));
+    available_dates.sort((moment1, moment2) => moment1 - moment2);
+    return available_dates;
 }
 
 
 fetchAvailableDates().then((val) => {
-    available = val;
-    colorCalendar(available);
+    available_dates = val;
+    colorCalendar(available_dates);
 });
 
 
@@ -84,7 +86,6 @@ const myChart = new Chart(ctx, {
     }
 });
 
-
 L.Control.Command = L.Control.extend({
     options: {
         position: 'topleft',
@@ -138,6 +139,7 @@ L.Control.DatePicker = L.Control.extend({
         L.DomEvent
             .addListener(controlDiv, 'click', L.DomEvent.stopPropagation)
             .addListener(controlDiv, 'click', L.DomEvent.preventDefault)
+            .addListener(controlDiv, 'click', () => colorCalendar(available_dates));
 
         controlDiv.innerHTML = `<div id="date-range-picker" style="background-color: white;">
             <h4>Date range</h4>
@@ -145,7 +147,6 @@ L.Control.DatePicker = L.Control.extend({
               <input type="text" name="daterange-picker" class="form-control">
             </center>
           </div>`;
-
 
         return controlDiv;
     }
@@ -155,15 +156,59 @@ L.control.datePicker = function(options) {
 };
 L.control.datePicker({}).addTo(map);
 
+function getDatePickerMonthAndDates(current_month) {
+    let date = moment();
+    let month_obj = current_month.getElementsByClassName("month");
+    if (month_obj.length == 0) {
+        return Error("Date picker not loaded.")
+    }
+    let month_year_str = month_obj[0].innerHTML.split(" ");
+    date.month(month_year_str[0]).year(month_year_str[1]);
+    let tbody = current_month.getElementsByClassName("table-condensed")[0].children[1];
+    let days = [...tbody.getElementsByClassName("available")].filter((item) => !item.className.includes("ends"));
+
+    let moment_days = days.map((d) => {
+        let day_of_month = parseInt(d.innerText);
+        let base_date = moment(date);
+        base_date.date(day_of_month);
+        return {
+            dom_day: d,
+            moment_day: base_date
+        };
+    });
+
+    return moment_days.sort((d1, d2) => d1.moment_day - d2.moment_day);
+}
+
+
+function isSameDay(moment1, moment2) {
+    return moment1.isSame(moment2, "year") && moment1.isSame(moment2, "month") && moment1.isSame(moment2, "day");
+}
+
 function colorCalendar(dates) {
     let datepicker = document.getElementsByClassName("daterangepicker")[0];
     let current_month = datepicker.getElementsByClassName("drp-calendar left")[0];
-    let date = moment();
-    let month_year_str = current_month.getElementsByClassName("month")[0].innerHTML.split(" ");
-    date.month(month_year_str[0]).year(month_year_str[0]);
-    let tbody = current_month.getElementsByClassName("table-condensed")[0].children[1];
-    var days = [...tbody.getElementsByClassName("available")].filter((item) => !item.className.includes("ends"));
+    let next_month = datepicker.getElementsByClassName("drp-calendar right")[0];
+    let current_month_days = getDatePickerMonthAndDates(current_month);
+    let next_month_days = getDatePickerMonthAndDates(next_month);
 
+    // available and days_moment are two lists of moments assumed to be sorted.
+    if (!(current_month_days instanceof Error || next_month_days instanceof Error)) {
+        const days_moment = current_month_days.concat(next_month_days);
+        var index_avail = available_dates.length - 1;
+        var index_picker = days_moment.length - 1;
+        while (index_avail >= 0 && index_picker >= 0) {
+            if (isSameDay(days_moment[index_picker].moment_day, available_dates[index_avail])) {
+                days_moment[index_picker].dom_day.style.backgroundColor = "red";
+                index_picker--;
+                index_avail--;
+            } else if (days_moment[index_picker].moment_day.isAfter(available_dates[index_avail])) {
+                index_picker--;
+            } else {
+                index_avail--;
+            }
+        }
+    }
 }
 
 $(function() {
@@ -284,4 +329,5 @@ function updateData(dateStart, dateEnd) {
         .catch(err => console.error(`Error fetching data: ${err.message}`));
 
 }
+
 updateData(dateStart, dateEnd);
