@@ -14,3 +14,19 @@ I have opened registration to a few friends who also track their location with
 it, but I'm unable to accept any outside registrations right now.
 
 ## Build
+
+You need a running Postgres database (by default on localhost). 
+
+``` sh
+psql template1 -c 'CREATE USER overland WITH PASSWORD ${YOUR_PASSWORD};'
+psql template1 -c 'CREATE DATABASE overland_db WITH OWNER overland;'
+```
+
+Make sure all the parameters (including password and database location) are
+right in the `.env` file. The database is now ready.
+
+Then, building is as simple as 
+``` sh
+cargo build 
+```
+
