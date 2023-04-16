@@ -1,0 +1,158 @@
+{
+  "db": "PostgreSQL",
+  "1fbab8d7933b37ac7185c1b2d88157ae5bc5d32a87070b6d3dfde25184e276d4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "register_token",
+          "ordinal": 0,
+          "type_info": "Varchar"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "UPDATE register_tokens SET used=TRUE\n               WHERE register_tokens.register_token=$1 RETURNING\n               register_tokens.register_token"
+  },
+  "281ebb721b7b025156cefd03590a946ed07105b3802a698160a6d392120f1b1e": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Bool"
+        ]
+      }
+    },
+    "query": "INSERT INTO users (username, password, is_admin) VALUES ( $1, $2, $3 ) RETURNING users.id"
+  },
+  "460f931f69694d8fd8c46a4ede17707db3f31491323fef9a775667d58cbafcbd": {
+    "describe": {
+      "columns": [
+        {
+          "name": "user_id",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "is_admin",
+          "ordinal": 1,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        true,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT user_id, is_admin FROM input_tokens JOIN users ON\n           input_tokens.user_id=users.id WHERE input_token=$1"
+  },
+  "70a117589bfa0a122fb5e9f8157ce86eca4051a01d2881e3310a34562c98764d": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Varchar",
+          "Bool"
+        ]
+      }
+    },
+    "query": "INSERT INTO register_tokens (register_token, used) VALUES ( $1, $2 )"
+  },
+  "7257c705fafdb3493277da8eae2450ea5414572251e007c855f85b7956fdc2e4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "password",
+          "ordinal": 1,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "SELECT id, password from users where username=$1"
+  },
+  "a50596652f063f971a3acd49004766e32b1633cc727a73e071e5e878f53a0e12": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Varchar",
+          "Bool",
+          "Int4"
+        ]
+      }
+    },
+    "query": "INSERT INTO input_tokens (input_token, valid, user_id) VALUES ( $1, $2, $3 )"
+  },
+  "eb74e8532923296321b635499a417df42cc27af8638a4bcf58bd2c8984198dcb": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Varchar",
+          "Timestamp",
+          "Int2",
+          "Int4",
+          "Varchar",
+          {
+            "Custom": {
+              "kind": {
+                "Enum": [
+                  "unknown",
+                  "charging",
+                  "full",
+                  "unplugged"
+                ]
+              },
+              "name": "bat_type"
+            }
+          },
+          "Float4",
+          "Bpchar",
+          "Float8",
+          "Float8",
+          "Int4"
+        ]
+      }
+    },
+    "query": "INSERT INTO points (\n            user_id, time_id, altitude, speed, motion,\n            battery, battery_level, wifi, coords_x, coords_y, user_identifier)\n            VALUES ( $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11 )"
+  }
+}
