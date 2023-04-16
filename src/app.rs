@@ -41,6 +41,8 @@ pub async fn run_server() -> Result<(), sqlx::Error> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    sqlx::migrate!("database/migrations").run(&pool).await?;
+
     let shared_pdb = new_shared_db(&pool);
     if settings.auth.develop {
         tracing::warn!("Development mode should not be used in production!");
