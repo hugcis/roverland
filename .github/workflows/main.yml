@@ -53,12 +53,19 @@ jobs:
         env:
           PGPASSWORD: postgres
           DBPASSWORD: ci_test_password
-          
+
+      - name: Install sqlx CLI
+        run: cargo install sqlx-cli
+
       - name: Create user database
-        run: psql -U postgres -h localhost -p 5432 -w -c "CREATE DATABASE overland_db ENCODING 'UTF8' OWNER overland;"
+        run: sqlx database create
         env:
           PGPASSWORD: postgres
-      
+          
+      - name: Run migrations
+        run: sqlx migrate run --source database/migrations
+        env:
+          PGPASSWORD: postgres
 #       - name: Run migrations
 #         run: psql -U overland -d overland_db -h localhost -p 5432 -w < ./database/migrations/init.sql
 #         env:
