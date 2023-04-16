@@ -272,7 +272,6 @@ fn geoquery_to_primitive_datetime(
             end,
             result_type,
         } => {
-            println!("{}", start);
             let start_dt = Date::parse(&start, formatter).unwrap().midnight();
             let end_dt = Date::parse(&end, formatter).unwrap().midnight();
             (start_dt, end_dt, result_type)
@@ -369,9 +368,11 @@ impl IntoResponse for QueryPointResponse {
     }
 }
 
-fn filter_results(current_user: CurrentUser) -> String {
+fn filter_results(current_user: CurrentUser, first: bool) -> String {
     if current_user.is_admin {
         "".to_string()
+    } else if first {
+        format!("WHERE user_identifier={}", current_user.user_id)
     } else {
         format!("AND user_identifier={}", current_user.user_id)
     }
@@ -385,11 +386,10 @@ pub async fn available(
     let formatter = format_description!("[year]-[month]-[day]");
     let res: Vec<Date> = sqlx::query(&format!(
         r#"SELECT DISTINCT DATE(time_id) AS single_day FROM points {};"#,
-        filter_results(current_user)
+        filter_results(current_user, true)
     ))
     .map(|row: PgRow| -> sqlx::Result<sqlx::types::time::Date> {
         let tget = row.try_get("single_day");
-        println!("{:?}", tget);
         tget
     })
     .fetch_all(&pool)
@@ -421,7 +421,7 @@ pub async fn query_points(
             'YYYY-MM-DD HH24:MI:SS') {};"#,
         t_start.format(&format).unwrap(),
         t_end.format(&format).unwrap(),
-        filter_results(current_user)
+        filter_results(current_user, false)
     );
     let format_date = format_description!("[year]-[month]-[day]");
     let res: Vec<DataObj> = sqlx::query(&request)
@@ -461,14 +461,7 @@ pub async fn query_points(
         .await
         .unwrap()
         .into_iter()
-        .filter_map(|x| {
-            if let Ok(c) = x {
-                Some(c)
-            } else {
-                println!("{:?}", x);
-                None
-            }
-        })
+        .filter_map(|x| if let Ok(c) = x { Some(c) } else { None })
         .collect();
     match result_type {
         ResultType::GeoJSON => Ok((StatusCode::OK, QueryPointResponse::GeoJSON(Json(res)))),
